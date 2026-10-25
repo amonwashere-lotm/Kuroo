@@ -1,24 +1,31 @@
-# REO
+# Kuroo
 
-Reo is a modern, multipurpose Discord bot featuring a seamless web dashboard, comprehensive server security, advanced music playback, and automated community management tools.
+Kuroo is a modern, multipurpose Discord bot featuring a seamless web dashboard, comprehensive server security, advanced music playback, and automated community management tools.
 
-## Showcase
+## Credits
 
-### Overview
-<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/e9bb032c-c96f-4fcf-a8c2-d6189da1e9ff" />
+Kuroo is a fork of [Reo-Bot](https://github.com/RayExo/Reo-Bot), developed by
+[RayExo](https://github.com/RayExo) / **Codex Development**. The original bot,
+assets, and feature implementation belong to their original developers.
+Imported from upstream commit `565eb77b6ee22db5e0b1878207c0803794cbf5bf`.
+The original MIT copyright and license are preserved in [LICENSE](LICENSE).
 
-### Music
+## Kuroo changes
 
-<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/507f0aa3-9bc1-4074-a6e4-62cfaa20a58a" />
+- All Discord message output uses **Components V2**, with no container accent color.
+- Commands, logs, DMs, replies, interaction responses, follow-ups, and webhooks share
+  the same renderer. Native V2 help, music, and ticket layouts are preserved.
+- Older command modules use embeds only as internal document objects; the shared
+  renderer converts them to text displays, sections, and media before transmission.
+- Buttons and selects keep their callbacks. Partial edits retain the message body.
+- Long documents beyond Discord's V2 limits are supplied as `kuroo-details.txt`.
+- Presence starts with **Kuroo Devlopment**, rotates through a prefix hint and `/help`,
+  server/user statistics, and the website, and always stays in **Do Not Disturb**.
+- The source bot's `.env` is excluded. Configure your own account and developer IDs.
 
+## Upstream showcase
 
-### Bot UI
-
-<img width="658" height="848" alt="image" src="https://github.com/user-attachments/assets/00b7c7a6-39cf-4d42-9d10-b65607d6d4c8" />
-<br>
-
-<img width="748" height="548" alt="image" src="https://github.com/user-attachments/assets/68f9902c-01a8-42d5-a624-be8005fb604b" />
-
+See the [original project](https://github.com/RayExo/Reo-Bot) for its screenshots.
 
 ## Features
 
@@ -32,7 +39,7 @@ Reo is a modern, multipurpose Discord bot featuring a seamless web dashboard, co
 
 ## Stack
 
-- Python
+- Python 3.12 or newer
 - `discord.py`
 - `wavelink`
 - FastAPI
@@ -41,50 +48,40 @@ Reo is a modern, multipurpose Discord bot featuring a seamless web dashboard, co
 ## Project Layout
 
 - `main.py` - bot entry point
-- `reo/src` - commands, events, and runtime modules
-- `reo/surface` - dashboard and web routes
-- `reo/engine` - bot core
+- `kuroo/src` - commands, events, and runtime modules
+- `kuroo/surface` - dashboard and web routes
+- `kuroo/engine` - bot core
 - `storage` - Mongo-backed storage layer
-- `.env` - local environment config
+- `.env.example` - configuration template (copy to `.env`)
 
 ## Setup
 
 ### 1. Install dependencies
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
 ### 2. Create environment file
 
-Create `.env`:
+Copy the template and fill in your own values:
 
-```env
-TOKEN=""
-
-PREFIX=""
-
-SHARD_COUNT=""
-
-BOT_NAME="Reo"
-
-# Web / API Hosting
-WEB_HOST="0.0.0.0"
-WEB_PORT="25572"
-
-
-# Automation Features
-SYNC_EMOJIS="False"
-
-# OAuth2 / Dashboard Configuration
-DISCORD_CLIENT_ID=""
-DISCORD_CLIENT_SECRET=""
-DASHBOARD_SECRET=""
-DASHBOARD_BASE_URL="http://localhost:25572"
-
-# MongoDB Database Configuration
-MONGO_URI=""
+```bash
+cp .env.example .env
 ```
+
+Set `TOKEN`, `DISCORD_CLIENT_ID`, `MONGO_URI`, and `DEVELOPER_IDS` (comma-separated Discord user IDs).
+Enable the privileged member and message content intents in the Developer Portal
+for prefix commands and moderation events. Invite links use your configured or
+logged-in application ID. Set `WEBSITE`, `SUPPORT_SERVER`, and `VOTE_URL` to
+customize the public links. `PREFIX` defaults to `?`, so the hints
+are `?help` and `/help`; servers can configure their own prefix.
+
+For the dashboard, also set `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and a
+random `DASHBOARD_SECRET`, or set `DASHBOARD_ENABLED=False` for a bot-only run.
+Music requires a reachable Lavalink node configured in `kuroo/bridge/lavalink.py`.
 
 ### 3. Discord application setup
 
@@ -131,6 +128,18 @@ Login with Discord, choose a server you manage, and configure it from the dashbo
 - Only guild owners, administrators, or members with manage server access can manage a server in the dashboard.
 - The music page updates live while the bot is running.
 - The server language setting affects the help menu output.
+
+## Development checks
+
+```bash
+python -m unittest discover -s tests -v
+python -m compileall -q main.py kuroo storage tests
+```
+
+`discord.py==2.6.4` is pinned because the shared V2 renderer wraps its message
+serializers. Run the transport tests before changing that dependency. Gateway
+login, slash command sync, and real Discord rendering require your own test bot
+and server; the automated tests use mocked HTTP transports.
 
 ## License
 

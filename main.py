@@ -5,9 +5,9 @@ import discord
 import discord.http
 import uvicorn
 
-from reo.engine.Bot import AutoShardedBot
-from reo.console.logging import logger
-from reo.config.config import BotConfigClass
+from kuroo.engine.Bot import AutoShardedBot
+from kuroo.console.logging import logger
+from kuroo.config.config import BotConfigClass
 
 BotConfig = BotConfigClass()
 bot = AutoShardedBot()
@@ -15,9 +15,9 @@ bot = AutoShardedBot()
 
 async def main():
     try:
-        from reo.workflows.bootstrap import prepare_runtime
-        from reo.surface import server as surface_server
-        from reo.style.sync_emojis import run_sync
+        from kuroo.workflows.bootstrap import prepare_runtime
+        from kuroo.surface import server as surface_server
+        from kuroo.style.sync_emojis import run_sync
 
         await prepare_runtime()
         surface_server.bind_bot(bot)
@@ -30,7 +30,7 @@ async def main():
             logger.info("EmojiSync is currently disabled via config.")
         logger.separator()
         
-        await bot.load_extension("reo.src")
+        await bot.load_extension("kuroo.src")
 
         tasks = []
 

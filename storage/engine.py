@@ -9,8 +9,8 @@ from typing import Any
 
 from pymongo import ReturnDocument
 
-from reo.bridge.storage import get_collection
-from reo.console.logging import logger
+from kuroo.bridge.storage import get_collection
+from kuroo.console.logging import logger
 
 NOW = object()
 
@@ -213,7 +213,7 @@ class CollectionStore:
 
     async def _call_cache(self, cache_name: str, method_name: str, kwargs: dict[str, Any]) -> None:
         try:
-            from reo.workflows import cache as cache_module
+            from kuroo.workflows import cache as cache_module
 
             cache_handler = getattr(cache_module, cache_name, None)
             if cache_handler is None:

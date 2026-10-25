@@ -11,7 +11,7 @@ The current active branch is the supported version for security fixes.
 
 ## Reporting a Vulnerability
 
-If you find a security issue in REO, please report it privately.
+If you find a security issue in Kuroo, please report it privately.
 
 - Do not open a public issue for vulnerabilities.
 - Send the full details to the project owner or the private support contact used for development.

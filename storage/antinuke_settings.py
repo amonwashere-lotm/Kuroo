@@ -1,5 +1,5 @@
 from storage.engine import CollectionStore, NOW
-from reo.console.logging import logger
+from kuroo.console.logging import logger
 
 CollectionName = 'antinuke_settings'
 
