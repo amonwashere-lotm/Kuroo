@@ -64,6 +64,8 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             first_task = cog._activity_task
             await cog.on_ready()
             self.assertIs(cog._activity_task, first_task)
+            bot.tree.sync.assert_awaited_once_with()
+            self.assertTrue(bot._slash_synced)
             cog.cog_unload()
             with self.assertRaises(asyncio.CancelledError):
                 await first_task

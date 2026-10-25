@@ -215,6 +215,16 @@ class AutoShardedBot(commands.AutoShardedBot):
             await sync_application_emojis(self)
         if 'kuroo.src' not in self.extensions:
             await self.load_extension('kuroo.src')
+        logger.info(f'Command registry ready: {len(list(self.walk_commands()))} prefix paths, '
+                    f'{len(self.tree.get_commands())} global slash roots.')
+        try:
+            synced = await self.tree.sync()
+            self._slash_synced = True
+            logger.info(f'Published {len(synced)} global slash commands to Discord.')
+        except discord.HTTPException as error:
+            self._slash_synced = False
+            logger.error(f'Slash command sync failed (HTTP {error.status}, code {error.code}); '
+                         'prefix commands remain loaded. Retrying on ready.')
 
     async def _check_command_access(self, ctx: commands.Context) -> bool:
         if not ctx.guild or not ctx.command:

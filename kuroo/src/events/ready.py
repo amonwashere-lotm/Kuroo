@@ -42,8 +42,14 @@ class ready(commands.Cog):
                 asyncio.create_task(self.on_ready_startups())
             except:
                 pass
-            await self.bot.tree.sync()
-            logger.system(f"Application Commands (Tree) Synced")
+            if not getattr(self.bot, '_slash_synced', False):
+                try:
+                    await self.bot.tree.sync()
+                    self.bot._slash_synced = True
+                    logger.system('Application Commands (Tree) Synced')
+                except discord.HTTPException as error:
+                    logger.error(f'Slash command sync failed (HTTP {error.status}, code {error.code}). '
+                                 'Bot admins can retry with the prefix synccommands command.')
             # Load developers
             dev_ids = users_config.developer
             if isinstance(dev_ids, (int, str)):

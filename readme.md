@@ -138,6 +138,32 @@ Login with Discord, choose a server you manage, and configure it from the dashbo
 - The music page updates live while the bot is running.
 - The server language setting affects the help menu output.
 
+## Automatic help and command registration
+
+Help discovers commands from the running bot's prefix registry and local Discord
+application tree on every request and navigation step. It includes commands from
+new cogs without help metadata, nested subcommands, standalone commands, and
+slash-only commands. Hybrid commands appear once with both invocation styles.
+Hidden commands, hidden parents, and hidden admin cogs remain hidden.
+
+- `/help` or `?help`: choose a category or browse the complete paginated list.
+- `/help command:rank` or `?help rank`: see usage, arguments and aliases.
+- `?help tools subcommand`: look up a nested command (replace with an actual path).
+- Categories and command lists are paginated, so Discord's 25-option limit does
+  not hide new entries. The bot banner stays above every help page.
+- Help uses the local registry and works even when Discord's remote command-list
+  API is unavailable. Server prefixes and English/Hindi language preferences are retained.
+
+At authenticated startup, application emojis synchronize, all cogs load, and then
+all registered global slash commands synchronize to Discord. A failed slash sync
+keeps prefix commands loaded and retries on the ready event. Startup logs report
+loaded prefix paths, global slash roots, and synchronization failures.
+
+Bot admins can retry with `?synccommands` (or the configured server prefix), even
+when `/synccommands` is not yet visible in Discord. This command is private to bot
+admins and confirms how many slash commands were published. A push to GitHub does
+not restart a hosted bot: deploy the latest `main` and restart the host to run it.
+
 ## Leveling and economy
 
 These are hybrid commands: use `/command` or your server prefix (default `?`).

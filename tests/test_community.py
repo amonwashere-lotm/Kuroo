@@ -168,11 +168,14 @@ class CommunityBoundaryTests(unittest.IsolatedAsyncioTestCase):
             order.append('sync')
         async def load(name):
             order.append(name)
+        async def publish():
+            order.append('slash')
+            return []
         try:
-            with patch.object(bot.BotConfig, 'SYNC_EMOJIS', True), patch('kuroo.style.sync_emojis.sync_application_emojis', side_effect=sync), patch.object(bot, 'load_extension', side_effect=load):
+            with patch.object(bot.BotConfig, 'SYNC_EMOJIS', True), patch('kuroo.style.sync_emojis.sync_application_emojis', side_effect=sync), patch.object(bot, 'load_extension', side_effect=load), patch.object(bot.tree, 'sync', side_effect=publish):
                 await bot.setup_hook()
-            self.assertEqual(order, ['sync', 'kuroo.src'])
-            with patch.object(bot.BotConfig, 'SYNC_EMOJIS', False), patch('kuroo.style.sync_emojis.sync_application_emojis', new=AsyncMock()) as sync_mock, patch.object(bot, 'load_extension', new=AsyncMock()):
+            self.assertEqual(order, ['sync', 'kuroo.src', 'slash'])
+            with patch.object(bot.BotConfig, 'SYNC_EMOJIS', False), patch('kuroo.style.sync_emojis.sync_application_emojis', new=AsyncMock()) as sync_mock, patch.object(bot, 'load_extension', new=AsyncMock()), patch.object(bot.tree, 'sync', new=AsyncMock(return_value=[])):
                 await bot.setup_hook()
                 sync_mock.assert_not_awaited()
         finally:
