@@ -2239,50 +2239,13 @@ class Root(commands.Cog):
     @checks.is_owner()
     async def givebalance(self, ctx: commands.Context, user: discord.User, amount: int):
 
+        from kuroo.workflows import community
         try:
-
-            message = await ctx.send(
-                embed=discord.Embed(
-                    description=f"{self.bot.emoji.LOADING} Giving balance...",
-                    color=color.orange,
-                )
-            )
-
-            if amount < 0:
-
-                return await message.edit(
-                    embed=discord.Embed(
-                        description=f"{self.bot.emoji.ERROR} | Amount cannot be negative",
-                        color=color.red,
-                    )
-                )
-
-            user_data = self.bot.cache.users.get(str(user.id), {})
-
-            if not user_data:
-
-                user_data = await storage.users.get(id=user.id)
-
-            user_data = self.bot.cache.users.get(str(user.id), {})
-
-            await storage.users.update(
-                id=self.bot.cache.users.get(str(user.id), {}).get("id"),
-                balance=self.bot.cache.users.get(str(user.id), {}).get("balance", 0)
-                + amount,
-            )
-
-            await message.edit(
-                embed=discord.Embed(
-                    description=f"{self.bot.emoji.SUCCESS} | {user.display_name} | Current Balance: `{get_formatted_balance(self.bot.cache.users.get(str(user.id),{}).get('balance',0))}`{self.bot.emoji.COIN}",
-                    color=color.green,
-                )
-            )
-
-        except Exception as e:
-
-            await message.edit(
-                embed=discord.Embed(description=f"Error: {e}", color=color.red)
-            )
+            record = await community.admin_balance(user.id, amount, mode='add')
+        except community.CommunityError as error:
+            await ctx.send(str(error))
+            return
+        await ctx.send(f"{discord.utils.escape_markdown(user.display_name)} | Current balance: **{record['balance']:,.0f}** coins.")
 
     @root.command(
         name="removebalance",
@@ -2295,56 +2258,13 @@ class Root(commands.Cog):
         self, ctx: commands.Context, user: discord.User, amount: int
     ):
 
+        from kuroo.workflows import community
         try:
-
-            message = await ctx.send(
-                embed=discord.Embed(
-                    description=f"{self.bot.emoji.LOADING} Removing balance...",
-                    color=color.orange,
-                )
-            )
-
-            if amount < 0:
-
-                return await message.edit(
-                    embed=discord.Embed(
-                        description=f"{self.bot.emoji.ERROR} | Amount cannot be negative",
-                        color=color.red,
-                    )
-                )
-
-            user_data = self.bot.cache.users.get(str(user.id), {})
-
-            if not user_data:
-
-                user_data = await storage.users.get(id=user.id)
-
-            user_data = self.bot.cache.users.get(str(user.id), {})
-
-            await storage.users.update(
-                id=self.bot.cache.users.get(str(user.id), {}).get("id"),
-                balance=(
-                    self.bot.cache.users.get(str(user.id), {}).get("balance", 0)
-                    - amount
-                    if self.bot.cache.users.get(str(user.id), {}).get("balance", 0)
-                    - amount
-                    >= 0
-                    else 0
-                ),
-            )
-
-            await message.edit(
-                embed=discord.Embed(
-                    description=f"{self.bot.emoji.SUCCESS} | {user.display_name} | Current Balance: `{get_formatted_balance(self.bot.cache.users.get(str(user.id),{}).get('balance',0))}`{self.bot.emoji.COIN}",
-                    color=color.green,
-                )
-            )
-
-        except Exception as e:
-
-            await message.edit(
-                embed=discord.Embed(description=f"Error: {e}", color=color.red)
-            )
+            record = await community.admin_balance(user.id, amount, mode='remove')
+        except community.CommunityError as error:
+            await ctx.send(str(error))
+            return
+        await ctx.send(f"{discord.utils.escape_markdown(user.display_name)} | Current balance: **{record['balance']:,.0f}** coins.")
 
     @root.command(
         name="setbalance",
@@ -2355,40 +2275,13 @@ class Root(commands.Cog):
     @checks.is_owner()
     async def setbalance(self, ctx: commands.Context, user: discord.User, amount: int):
 
+        from kuroo.workflows import community
         try:
-
-            message = await ctx.send(
-                embed=discord.Embed(
-                    description=f"{self.bot.emoji.LOADING} Setting balance...",
-                    color=color.orange,
-                )
-            )
-
-            user_data = self.bot.cache.users.get(str(user.id), {})
-
-            if not user_data:
-
-                user_data = await storage.users.get(id=user.id)
-
-            user_data = self.bot.cache.users.get(str(user.id), {})
-
-            await storage.users.update(
-                id=self.bot.cache.users.get(str(user.id), {}).get("id"),
-                balance=amount if amount >= 0 else 0,
-            )
-
-            await message.edit(
-                embed=discord.Embed(
-                    description=f"{self.bot.emoji.SUCCESS} | {user.display_name} | Current Balance: `{get_formatted_balance(self.bot.cache.users.get(str(user.id),{}).get('balance',0))}`{self.bot.emoji.COIN}",
-                    color=color.green,
-                )
-            )
-
-        except Exception as e:
-
-            await message.edit(
-                embed=discord.Embed(description=f"Error: {e}", color=color.red)
-            )
+            record = await community.admin_balance(user.id, max(0, amount), mode='set')
+        except community.CommunityError as error:
+            await ctx.send(str(error))
+            return
+        await ctx.send(f"{discord.utils.escape_markdown(user.display_name)} | Current balance: **{record['balance']:,.0f}** coins.")
 
     # @root.command(
 

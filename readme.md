@@ -10,6 +10,13 @@ assets, and feature implementation belong to their original developers.
 Imported from upstream commit `565eb77b6ee22db5e0b1878207c0803794cbf5bf`.
 The original MIT copyright and license are preserved in [LICENSE](LICENSE).
 
+Leveling and economy source research used the complete cogs in
+[Programmify/Logiq](https://github.com/programmify/Logiq/tree/04bf128797b0200f596dc09784042fe5c644567a/cogs)
+(MIT, Copyright 2025 Programmify). The notice is retained in
+[third_party/Logiq-LICENSE](third_party/Logiq-LICENSE). Kuroo implements its own
+atomic MongoDB operations, permissions, cooldowns, and Pillow layouts; it does not
+require running a second bot or installing the reference project.
+
 ## Kuroo changes
 
 - All Discord message output uses **Components V2**, with no container accent color.
@@ -35,6 +42,8 @@ See the [original project](https://github.com/RayExo/Reo-Bot) for its screenshot
 - Music controller with live artwork, queue, and activity
 - Security and automod controls
 - Tickets, giveaways, welcomer, and command management
+- Server leveling, rank/leaderboard images, global coins, banking and cosmetic titles
+- Pillow welcome/goodbye cards and automatic application emoji synchronization
 - English and Hindi help menu support
 
 ## Stack
@@ -128,6 +137,74 @@ Login with Discord, choose a server you manage, and configure it from the dashbo
 - Only guild owners, administrators, or members with manage server access can manage a server in the dashboard.
 - The music page updates live while the bot is running.
 - The server language setting affects the help menu output.
+
+## Leveling and economy
+
+These are hybrid commands: use `/command` or your server prefix (default `?`).
+Leveling starts enabled. Human messages containing at least three characters earn
+**15 XP once per 60 seconds per member per server**. Bots, webhooks, DMs,
+recognized commands, ignored channels/users, and bot-blacklisted users/servers do
+not earn XP. Cooldowns survive restarts. Level `n` starts at `100 × n²` total XP.
+Rank is server-specific; equal XP is ordered by user ID for stable positions.
+Level-up announcements are off until a channel is selected.
+
+| Command | What it does |
+| --- | --- |
+| `/rank [member]` | Show the member's Pillow rank card with avatar, level, rank, XP progress and equipped title. |
+| `/lb kind:levels page:1` | Server XP leaderboard, 10 entries per image. Prefix alias: `leaderboard`. |
+| `/lb kind:coins page:1` | Global wallet coin leaderboard. Bank savings are shown by `/balance`. |
+| `/leveling on` / `/leveling off` | Manage Server or bot admins: enable/disable XP collection. Existing XP is retained. |
+| `/levelchannel [channel]` | Manage Server or bot admins: select the level-up channel; omit it to disable announcements. |
+| `/balance [member]` | Show global wallet and bank balances. Prefix aliases: `bal`, `wallet`. |
+| `/daily` | Earn 250 coins once every 24 hours. |
+| `/work` | Earn 80–160 coins once every hour. |
+| `/deposit amount` / `/withdraw amount` | Move positive whole coins between wallet and bank; no fees or interest. |
+| `/shop` | Browse cosmetic rank titles. |
+| `/buy item` | Buy `night-owl` (500), `aurora` (1,500), or `after-hours` (3,000 coins), once each. |
+| `/inventory` / `/equip item` | View owned titles and equip one on your rank card; `/equip none` clears it. |
+
+Coins reuse existing global `users.balance` records, including the owner's
+`root givebalance`, `root removebalance`, and `root setbalance` commands. Existing
+balances and premium/no-prefix settings are retained. XP uses a separate
+`member_levels` collection per server. New earnings, purchases, and bank moves are
+atomic single-document updates, including their cooldown/ownership checks; no
+replica set or transaction support is needed. New commands accept whole coin
+amounts from 1 to 1,000,000,000,000. Coins and titles have no monetary value.
+Startup requires unique user IDs and guild/member pairs; resolve any legacy
+`users.user_id` duplicates before upgrading. No records are automatically deleted.
+
+## Welcome and goodbye images
+
+Rank, leaderboards, welcome, and goodbye cards are generated locally with Pillow:
+a nearly black background, subtle violet/teal gradient, circular avatar, and
+simple high-contrast type. This visual style is available to every server.
+Discord message containers still have **no accent color** and use **Components V2**.
+Avatar downloads have a timeout; a local silhouette is used when unavailable.
+Pillow rendering runs off the event loop. No image API key is required.
+
+- `/welcomecards on [channel]`: Manage Server or bot admins can enable welcome
+  cards (defaults to the current text channel). Existing welcome content/media
+  settings remain in effect. `/welcomecards off` hides only the generated card.
+- Existing enabled welcome configurations receive the card automatically. The
+  original `/welcome` settings menu continues to control custom text and media.
+- `/leave on [channel]`: configure the goodbye card channel. It is disabled by
+  default; `/leave off` disables it again. Membership removal events, including
+  kicks and bans, produce this card when configured; moderation logs are separate.
+- `/welcomepreview` and `/leavepreview`: preview cards before enabling delivery.
+- The bot needs View Channel, Send Messages, Attach Files, and Embed Links in
+  delivery channels, plus the **Server Members Intent** for join/leave events.
+  Enable **Message Content Intent** for message XP and prefix commands.
+
+## Automatic emoji sync
+
+`SYNC_EMOJIS=True` is the default. After Discord login and before cogs/commands
+load, Kuroo reuses matching application emojis by ID/name and uploads missing
+icons from the source Discord CDN. Resolved icons are applied to the running
+module immediately, including after config reload. Source files are not rewritten.
+Discord's authenticated client handles API rate limits. Missing/unavailable
+source images fall back to a small Unicode symbol; an application-list API failure
+logs a warning and retains configured icons. `SYNC_EMOJIS=False` opts out.
+Only the normal bot token is required. No live emoji upload is attempted by tests.
 
 ## Premium and bot admin commands
 

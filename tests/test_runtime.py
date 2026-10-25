@@ -17,12 +17,12 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(bot.status, discord.Status.dnd)
             self.assertEqual(bot.activity.name, 'Kuroo Devlopment')
             await bot.load_extension('kuroo.src')
-            self.assertEqual(len(bot.cogs), 40)
+            self.assertEqual(len(bot.cogs), 41)
             self.assertGreater(len(list(bot.walk_commands())), 200)
             self.assertGreater(len(bot.tree.get_commands()), 60)
             self.assertIn('help', bot.all_commands)
             self.assertIsNotNone(bot.tree.get_command('help'))
-            for name in ('premiumcode', 'premiumgrant', 'premiumrevoke', 'votepremium', 'redeem', 'noprefix'):
+            for name in ('premiumcode', 'premiumgrant', 'premiumrevoke', 'votepremium', 'redeem', 'noprefix', 'rank', 'lb', 'daily', 'work', 'balance', 'deposit', 'withdraw', 'shop', 'buy', 'inventory', 'equip', 'leveling', 'levelchannel', 'welcomecards', 'leave', 'welcomepreview', 'leavepreview'):
                 self.assertIn(name, bot.all_commands)
                 self.assertIsNotNone(bot.tree.get_command(name))
         finally:

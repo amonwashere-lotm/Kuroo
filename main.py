@@ -17,21 +17,11 @@ async def main():
     try:
         from kuroo.workflows.bootstrap import prepare_runtime
         from kuroo.surface import server as surface_server
-        from kuroo.style.sync_emojis import run_sync
 
         await prepare_runtime()
         surface_server.bind_bot(bot)
         logger.separator()
         
-        # Fast Emoji Synchronization
-        if BotConfig.SYNC_EMOJIS:
-            run_sync()
-        else:
-            logger.info("EmojiSync is currently disabled via config.")
-        logger.separator()
-        
-        await bot.load_extension("kuroo.src")
-
         tasks = []
 
         async def start_bot():

@@ -36,6 +36,8 @@ async def load_storage():
         storage.music.create_table(),
     ]
     await asyncio.gather(*tasks)
+    from kuroo.workflows.community import prepare
+    await prepare()
     logger.database("Database collections loaded")
 
 

@@ -228,7 +228,7 @@ class on_member_join(commands.Cog):
                 return
             if not welcomer_cache.get('welcome'):
                 return logger.warning(f"Guild {guild.name} has welcome disabled")
-            if not welcomer_cache.get('welcome_message') and not welcomer_cache.get('welcome_embed'):
+            if not welcomer_cache.get('welcome_message') and not welcomer_cache.get('welcome_embed') and not welcomer_cache.get('welcome_card', True):
                 return logger.warning(f"Guild {guild.name} has welcome message and embed disabled")
             channel_id = welcomer_cache.get('welcome_channel')
             if not channel_id:
@@ -287,7 +287,17 @@ class on_member_join(commands.Cog):
                     embed.set_author(name=fetch_variables(text=welcomer_cache.get('welcome_embed_author'),member=member,guild=guild),icon_url=fetch_variables(text=welcomer_cache.get('welcome_embed_author_icon'),member=member,guild=guild),url=fetch_variables(text=welcomer_cache.get('welcome_embed_author_url'),member=member,guild=guild))
             else:
                 embed = None
-            await channel.send(content=message_content,embed=embed)
+            if welcomer_cache.get('welcome_card', True):
+                from contextlib import closing
+                from io import BytesIO
+                from kuroo.workflows.cards import member_image
+                raw = await member_image(member)
+                with closing(discord.File(BytesIO(raw), filename='kuroo-welcome.png')) as file:
+                    view = discord.ui.LayoutView()
+                    view.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media='attachment://kuroo-welcome.png')))
+                    await channel.send(content=message_content, embed=embed, file=file, view=view)
+            else:
+                await channel.send(content=message_content,embed=embed)
         except Exception as e:
             logger.error(f"Error in file {__file__} at line {traceback.extract_tb(sys.exc_info()[2])[0][1]}: {e}")
 

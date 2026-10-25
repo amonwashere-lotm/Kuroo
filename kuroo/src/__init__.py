@@ -19,6 +19,7 @@ from .commands.mention import MentionReply
 from .commands.moderation import Moderation
 from .commands.more import More
 from .commands.premium import Premium
+from .commands.community import Community
 from .commands.music import Music
 from .commands.root import Root
 from .commands.security import Security
@@ -68,6 +69,7 @@ async def setup(bot: AutoShardedBot):
         Voice(bot=bot),
         More(bot=bot),
         Premium(bot=bot),
+        Community(bot=bot),
         Root(bot=bot),
         on_command(bot=bot),
         Wavelink(bot=bot),

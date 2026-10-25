@@ -208,6 +208,14 @@ class AutoShardedBot(commands.AutoShardedBot):
         self.add_check(self._check_command_access)
 
 
+    async def setup_hook(self):
+        # login() has established application identity and authenticated HTTP here.
+        from kuroo.style.sync_emojis import sync_application_emojis
+        if self.BotConfig.SYNC_EMOJIS:
+            await sync_application_emojis(self)
+        if 'kuroo.src' not in self.extensions:
+            await self.load_extension('kuroo.src')
+
     async def _check_command_access(self, ctx: commands.Context) -> bool:
         if not ctx.guild or not ctx.command:
             return True
@@ -292,6 +300,8 @@ class AutoShardedBot(commands.AutoShardedBot):
     async def reload(self):
         importlib.reload(config)
         importlib.reload(emoji)
+        from kuroo.style.sync_emojis import apply_synced_emojis
+        apply_synced_emojis()
         importlib.reload(urls)
         importlib.reload(storage)
         self.users_data = config.users

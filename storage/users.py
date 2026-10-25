@@ -4,10 +4,10 @@ CollectionName = 'users'
 
 _store = CollectionStore(
     name=CollectionName,
-    defaults={'balance': 0, 'level': 0, 'xp': 0, 'transfered_balance': 0, 'received_balance': 0, 'economy_rules_accepted': False, 'type': 'user', 'relationship': 'single', 'no_prefix': False, 'no_prefix_subscription': False, 'banned': False, 'updated_at': NOW, 'created_at': NOW},
+    defaults={'balance': 0, 'bank': 0, 'owned_titles': [], 'card_title': 'none', 'level': 0, 'xp': 0, 'transfered_balance': 0, 'received_balance': 0, 'economy_rules_accepted': False, 'type': 'user', 'relationship': 'single', 'no_prefix': False, 'no_prefix_subscription': False, 'banned': False, 'updated_at': NOW, 'created_at': NOW},
     unique_sets=[['user_id']],
     json_fields=set([]),
-    datetime_fields=set(['banned_at', 'created_at', 'daily_at', 'no_prefix_end', 'received_balance_at', 'transfered_balance_at', 'updated_at']),
+    datetime_fields=set(['banned_at', 'created_at', 'daily_at', 'no_prefix_end', 'received_balance_at', 'transfered_balance_at', 'updated_at', 'work_at']),
     sequence_fields={},
     update_cache=('users_cache', ['user_id']),
     delete_cache=('users_cache', ['user_id']),
