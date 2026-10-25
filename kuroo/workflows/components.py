@@ -194,7 +194,9 @@ def message_payload(payload, previous=None, *, overflow_files=None):
         previews = [_container([_text('\n\n'.join(text)[:allowance] +
                     '\n\nFull message attached: kuroo-details.txt')], key)
                     for key, text in groups.items()]
-        items = previews + controls + visible_files
+        # Keep the bot banner above long help pages as well.
+        visuals = [item for item in items if item['type'] == 12]
+        items = visuals + previews + controls + visible_files
         items.append({'type': 13, 'file': {'url': 'attachment://kuroo-details.txt'}})
     if not items:
         items = [_container([_text('\u200b')])]

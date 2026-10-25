@@ -47,7 +47,7 @@ def check_is_admin_predicate(user):
     return False
 
 def is_admin():
-    return commands.check(check_is_admin_predicate)
+    return commands.check(lambda ctx: check_is_admin_predicate(ctx.author))
 
 def check_is_owner_predicate(ctx):
     if ctx.author.id in cache.owners or ctx.author.id in config.users.root:

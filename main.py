@@ -72,7 +72,7 @@ async def main():
             except Exception:
                 logger.error(f"Error in file {__file__}: {traceback.format_exc()}")
 
-        if BotConfig.DASHBOARD_ENABLED:
+        if BotConfig.DASHBOARD_ENABLED or BotConfig.TOPGG_WEBHOOK_SECRET:
             try:
                 tasks.append(asyncio.create_task(start_web()))
             except Exception:

@@ -17,11 +17,14 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(bot.status, discord.Status.dnd)
             self.assertEqual(bot.activity.name, 'Kuroo Devlopment')
             await bot.load_extension('kuroo.src')
-            self.assertEqual(len(bot.cogs), 39)
+            self.assertEqual(len(bot.cogs), 40)
             self.assertGreater(len(list(bot.walk_commands())), 200)
             self.assertGreater(len(bot.tree.get_commands()), 60)
             self.assertIn('help', bot.all_commands)
             self.assertIsNotNone(bot.tree.get_command('help'))
+            for name in ('premiumcode', 'premiumgrant', 'premiumrevoke', 'votepremium', 'redeem', 'noprefix'):
+                self.assertIn(name, bot.all_commands)
+                self.assertIsNotNone(bot.tree.get_command(name))
         finally:
             for name in list(bot.cogs):
                 await bot.remove_cog(name)

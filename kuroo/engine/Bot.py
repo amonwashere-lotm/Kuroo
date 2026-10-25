@@ -306,22 +306,17 @@ class AutoShardedBot(commands.AutoShardedBot):
 
     
     async def get_prefix(self, message: discord.Message):
-            default_prefix = str(BotConfig.PREFIX)
-            if message.guild:
-                guild_id = str(message.guild.id)                
-                if cache.users.get(str(message.author.id),{}).get('no_prefix',False) == True and cache.users.get(str(message.author.id),{}).get('no_prefix_subscription',False) == True:
-                    if guild_id in cache.guilds:
-                        guild_cache = cache.guilds[guild_id]
-                        prefix = guild_cache.get('prefix', default_prefix)
-                        return commands.when_mentioned_or(prefix, '')(self, message)
-                    else:
-                        return commands.when_mentioned_or(default_prefix, '')(self, message)
-                else:
-                    if guild_id in cache.guilds:
-                        guild_cache = cache.guilds[guild_id]
-                        prefix = guild_cache.get('prefix', default_prefix)
-                        return commands.when_mentioned_or(prefix)(self, message)
-                    else:
-                        return commands.when_mentioned_or(default_prefix)(self, message)
-            else:
-                return commands.when_mentioned_or(default_prefix)(self, message)
+        from kuroo.src.checks.checks import check_is_admin_predicate
+        from kuroo.workflows.premium_state import utc
+        default_prefix = str(self.BotConfig.PREFIX)
+        prefix = (cache.guilds.get(str(message.guild.id), {}).get('prefix') or default_prefix
+                  if message.guild else default_prefix)
+        user = cache.users.get(str(message.author.id), {})
+        if check_is_admin_predicate(message.author):
+            enabled = user.get('admin_no_prefix', True)
+        else:
+            end = user.get('no_prefix_end')
+            enabled = (user.get('no_prefix', False) and user.get('no_prefix_subscription', False)
+                       and (not end or utc(end) > datetime.datetime.now(datetime.timezone.utc)))
+        prefixes = (prefix, '') if enabled else (prefix,)
+        return commands.when_mentioned_or(*prefixes)(self, message)

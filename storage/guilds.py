@@ -5,16 +5,19 @@ CollectionName = 'guilds'
 _store = CollectionStore(
     name=CollectionName,
     defaults={},
-    unique_sets=[],
+    unique_sets=[['guild_id']],
     json_fields=set(['extra_owner_ids']),
-    datetime_fields=set([]),
+    datetime_fields={'subscription_end', 'premium_revoked_at', 'created_at', 'updated_at'},
     sequence_fields={},
     update_cache=('guilds_cache', ['guild_id']),
     delete_cache=('guilds_cache', ['guild_id']),
 )
 
 async def create_table():
-    return await _store.prepare()
+    await _store.prepare()
+    # Fail clearly if old duplicate guild records would make grants ambiguous.
+    collection = await _store._collection()
+    await collection.create_index('guild_id', unique=True, sparse=True, name='guilds_guild_id_unique')
 
 async def insert(
 

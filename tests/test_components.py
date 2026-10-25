@@ -209,6 +209,16 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('Old page', json.dumps(self.sent[-1]['components']))
         self.assertIn('New page', json.dumps(self.sent[-1]['components']))
 
+    async def test_long_help_page_keeps_its_banner_above_the_preview(self):
+        view = discord.ui.LayoutView()
+        view.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media='https://example.com/banner.png')))
+        view.add_item(discord.ui.TextDisplay('Help command description ' * 300))
+        with discord.http.handle_message_parameters(view=view) as params:
+            payload = body(params)
+            self.assertEqual(payload['components'][0]['type'], 12)
+            self.assertIn('banner.png', json.dumps(payload['components'][0]))
+        view.stop()
+
     async def test_overflow_preserves_existing_upload(self):
         with closing(discord.File(BytesIO(b'data'), filename='data.csv')) as file:
             with discord.http.handle_message_parameters('x' * 5000, file=file) as params:

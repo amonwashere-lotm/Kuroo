@@ -34,6 +34,7 @@ class Help(commands.Cog):
             emoji=self.bot.emoji.HELP,
         )
         self.all_app_commands = None
+        self._banner_loaded = False
 
     @commands.hybrid_command(
         name="help",
@@ -50,6 +51,16 @@ class Help(commands.Cog):
                 await ctx.defer()
             if not self.all_app_commands:
                 self.all_app_commands = await self.bot.tree.fetch_commands()
+            if not self._banner_loaded:
+                banner = self.bot.BotConfig.BOT_BANNER_URL
+                if not banner:
+                    try:
+                        profile = await self.bot.fetch_user(self.bot.user.id)
+                        banner = profile.banner.url if profile.banner else None
+                    except discord.HTTPException:
+                        banner = None
+                self.bot.help_banner_url = banner
+                self._banner_loaded = True
             view = HomeView(self.bot, ctx, self.all_app_commands)
             view.message = await ctx.send(view=view)
         except Exception as e:
@@ -67,12 +78,15 @@ class BaseHelpView(ui.LayoutView):
         self.all_app_commands = all_app_commands
         self.reported = reported
         self.message: discord.Message = None
+        banner = getattr(bot, 'help_banner_url', None)
+        if banner:
+            self.add_item(ui.MediaGallery(discord.MediaGalleryItem(media=banner)))
 
     def get_language(self) -> str:
         if not getattr(self.ctx, "guild", None):
             return "en"
         return (
-            self.bot.cache.guilds.get(str(self.ctx.guild.id), {}).get("language", "en")
+            self.bot.cache.guilds.get(str(self.ctx.guild.id) if self.ctx.guild else "", {}).get("language", "en")
             or "en"
         ).lower()
 
@@ -137,7 +151,7 @@ class HomeView(BaseHelpView):
             )
         )
         container.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
-        prefix = self.bot.cache.guilds.get(str(self.ctx.guild.id), {}).get(
+        prefix = self.bot.cache.guilds.get(str(self.ctx.guild.id) if self.ctx.guild else "", {}).get(
             "prefix", self.bot.BotConfig.PREFIX
         )
         if self.get_language() == "hi":

@@ -1172,455 +1172,54 @@ class More(commands.Cog):
 
             logger.error(f"Error in file {__file__}: {traceback.format_exc()}")
 
-    @commands.hybrid_command(name="redeem", help="Claim Redeem Code")
+    @commands.hybrid_command(name="redeem", help="Redeem a premium or legacy subscription code")
+    @commands.guild_only()
     @checks.ignore_check()
     @checks.blacklist_check()
-    async def redeem(self, ctx: commands.Context):
-
-        try:
-
-            if ctx.interaction:
-
-                await ctx.defer()
-
-            embed = discord.Embed(title="Please Enter Redeem Code", color=color.gray)
-
-            embed.set_footer(text="You can get redeem code from our support server")
-
-            timeout_time = 60
-
-            cancled = False
-
-            def reset_timeout_time(timeout: int = 60):
-
-                nonlocal timeout_time
-
-                timeout_time = timeout
-
-            view = discord.ui.View(timeout=70)
-
-            enter_code = discord.ui.Button(
-                label="Enter Redeem Code",
-                style=discord.ButtonStyle.primary,
-                emoji=self.bot.emoji.REDEEM,
-            )
-
-            enter_code.callback = lambda i: enter_code_callback(i)
-
-            view.add_item(enter_code)
-
-            async def enter_code_callback(interaction: discord.Interaction):
-
-                try:
-
-                    if interaction.user.id != ctx.author.id:
-
-                        await interaction.response.send_message(
-                            embed=discord.Embed(
-                                description="You can't use this button", color=color.red
-                            ),
-                            ephemeral=True,
-                            delete_after=5,
-                        )
-
-                        return
-
-                    reset_timeout_time()
-
-                    self_bot = self.bot
-
-                    class enter_code_modal(discord.ui.Modal, title="Enter Redeem Code"):
-
-                        redeem_code = discord.ui.TextInput(
-                            label="Redeem Code",
-                            placeholder="Enter Your Redeem Code",
-                            min_length=10,
-                            max_length=30,
-                            required=True,
-                            style=discord.TextStyle.short,
-                        )
-
-                        async def on_submit(self, interaction: discord.Interaction):
-
-                            try:
-
-                                if interaction.user.id != ctx.author.id:
-
-                                    await interaction.response.send_message(
-                                        embed=discord.Embed(
-                                            description="You can't use this button",
-                                            color=color.red,
-                                        ),
-                                        ephemeral=True,
-                                        delete_after=5,
-                                    )
-
-                                    return
-
-                                reset_timeout_time()
-
-                                redeem_code = self.redeem_code.value
-
-                                if not cache.redeem_codes.get(redeem_code, {}):
-
-                                    await interaction.response.send_message(
-                                        embed=discord.Embed(
-                                            description="Invalid Redeem Code",
-                                            color=color.red,
-                                        ),
-                                        ephemeral=True,
-                                        delete_after=5,
-                                    )
-
-                                    return
-
-                                if (
-                                    cache.redeem_codes.get(redeem_code, {}).get(
-                                        "claimed"
-                                    )
-                                    == True
-                                ):
-
-                                    await interaction.response.send_message(
-                                        embed=discord.Embed(
-                                            description="Redeem Code Already Claimed",
-                                            color=color.red,
-                                        ),
-                                        ephemeral=True,
-                                        delete_after=5,
-                                    )
-
-                                    return
-
-                                if cache.redeem_codes.get(redeem_code, {}).get(
-                                    "expires_at"
-                                ):
-
-                                    localized = (
-                                        cache.redeem_codes.get(redeem_code, {})
-                                        .get("expires_at")
-                                        .replace(tzinfo=None)
-                                    )
-
-                                    if datetime.datetime.now() > localized:
-
-                                        await interaction.response.send_message(
-                                            embed=discord.Embed(
-                                                description=f"Redeem Code Expired at <t:{int(cache.redeem_codes.get(redeem_code,{}).get('expires_at').timestamp())}:F>",
-                                                color=color.red,
-                                            ),
-                                            ephemeral=True,
-                                            delete_after=30,
-                                        )
-
-                                await interaction.response.defer()
-
-                                async def get_embed():
-
-                                    redeem_code_data = cache.redeem_codes.get(
-                                        redeem_code, {}
-                                    )
-
-                                    redeem_code_data_code_type = redeem_code_data.get(
-                                        "code_type"
-                                    )
-
-                                    redeem_code_data_code_value = redeem_code_data.get(
-                                        "code_value"
-                                    )
-
-                                    redeem_code_data_valid_for_days = (
-                                        redeem_code_data.get("valid_for_days")
-                                    )
-
-                                    redeem_code_data_expires_at = redeem_code_data.get(
-                                        "expires_at"
-                                    )
-
-                                    redeem_code_data_claimed = redeem_code_data.get(
-                                        "claimed"
-                                    )
-
-                                    redeem_code_data_claimed_by = redeem_code_data.get(
-                                        "claimed_by"
-                                    )
-
-                                    redeem_code_data_claimed_at = redeem_code_data.get(
-                                        "claimed_at"
-                                    )
-
-                                    redeem_code_data_created_at = redeem_code_data.get(
-                                        "created_at"
-                                    )
-
-                                    embed = discord.Embed(
-                                        title="Redeem Code Details",
-                                        color=(
-                                            color.green
-                                            if not redeem_code_data_claimed
-                                            else color.red
-                                        ),
-                                    )
-
-                                    embed.description = (
-                                        f"Redeem Code: ||`{redeem_code}`||"
-                                    )
-
-                                    embed.description += (
-                                        f"\nCode Type: `{redeem_code_data_code_type.capitalize()}`"
-                                        if redeem_code_data_code_type
-                                        else "\nCode Type: `None`"
-                                    )
-
-                                    embed.description += f"\nCode Value: `{redeem_code_types.get(redeem_code_data_code_value,'None')}`"
-
-                                    embed.description += f"\nCode Valid For: `{redeem_code_data_valid_for_days} Days`"
-
-                                    embed.description += (
-                                        f"\nCode Expires At: <t:{int(redeem_code_data_expires_at.timestamp())}:F>"
-                                        if redeem_code_data_expires_at
-                                        else "\nCode Expires At: `Never`"
-                                    )
-
-                                    embed.description += (
-                                        f"\nCode Claimed: `{redeem_code_data_claimed}`"
-                                    )
-
-                                    embed.description += (
-                                        f"\nCode Claimed By: <@{redeem_code_data_claimed_by}>"
-                                        if redeem_code_data_claimed_by
-                                        else "\nCode Claimed By: `None`"
-                                    )
-
-                                    embed.description += (
-                                        f"\nCode Claimed At: <t:{int(redeem_code_data_claimed_at.timestamp())}:F>"
-                                        if redeem_code_data_claimed_at
-                                        else "\nCode Claimed At: `None`"
-                                    )
-
-                                    embed.description += f"\nCode Created At: <t:{int(redeem_code_data_created_at.timestamp())}:F>"
-
-                                    embed.set_footer(
-                                        text="Do you want to claim this code?"
-                                    )
-
-                                    embed.set_thumbnail(
-                                        url=self_bot.user.display_avatar.url
-                                    )
-
-                                    return embed
-
-                                async def get_view(disabled: bool = False):
-
-                                    view = discord.ui.View()
-
-                                    claim_button = discord.ui.Button(
-                                        label="Claim",
-                                        style=discord.ButtonStyle.success,
-                                        emoji=self_bot.emoji.SUCCESS,
-                                        disabled=disabled,
-                                    )
-
-                                    claim_button.callback = (
-                                        lambda i: claim_button_callback(i)
-                                    )
-
-                                    view.add_item(claim_button)
-
-                                    cancel_button = discord.ui.Button(
-                                        label="Cancel",
-                                        emoji=self_bot.emoji.CANCLED,
-                                        style=discord.ButtonStyle.gray,
-                                    )
-
-                                    cancel_button.callback = (
-                                        lambda i: cancel_button_callback(i)
-                                    )
-
-                                    view.add_item(cancel_button)
-
-                                    if disabled:
-
-                                        for item in view.children:
-
-                                            item.disabled = True
-
-                                    return view
-
-                                async def cancel_button_callback(
-                                    interaction: discord.Interaction,
-                                ):
-
-                                    try:
-
-                                        if interaction.user.id != ctx.author.id:
-
-                                            await interaction.response.send_message(
-                                                embed=discord.Embed(
-                                                    description="You can't use this button",
-                                                    color=color.red,
-                                                ),
-                                                ephemeral=True,
-                                                delete_after=5,
-                                            )
-
-                                            return
-
-                                        nonlocal cancled
-
-                                        cancled = True
-
-                                        await interaction.response.edit_message(
-                                            view=await get_view(disabled=True)
-                                        )
-
-                                    except Exception as e:
-
-                                        logger.error(
-                                            f"Error in file {__file__} at line {traceback.extract_tb(sys.exc_info()[2])[0][1]}: {e}"
-                                        )
-
-                                async def claim_button_callback(
-                                    interaction: discord.Interaction,
-                                ):
-
-                                    try:
-
-                                        if interaction.user.id != ctx.author.id:
-
-                                            await interaction.response.send_message(
-                                                embed=discord.Embed(
-                                                    description="You can't use this button",
-                                                    color=color.red,
-                                                ),
-                                                ephemeral=True,
-                                                delete_after=5,
-                                            )
-
-                                            return
-
-                                        await interaction.response.edit_message(
-                                            view=None,
-                                            embed=discord.Embed(
-                                                description=f"{self_bot.emoji.LOADING} Claiming Redeem Code...",
-                                                color=color.gray,
-                                            ),
-                                        )
-
-                                        nonlocal cancled
-
-                                        cancled = True
-
-                                        redeem_code_data = cache.redeem_codes.get(
-                                            redeem_code, {}
-                                        )
-
-                                        if "guild" in redeem_code_data.get(
-                                            "code_value"
-                                        ):
-
-                                            await change_guild_subscription(
-                                                bot=self_bot,
-                                                guild_id=ctx.guild.id,
-                                                subscription=redeem_code_data.get(
-                                                    "code_value"
-                                                ),
-                                                valid_for_days=redeem_code_data.get(
-                                                    "valid_for_days", None
-                                                ),
-                                            )
-
-                                        elif "user" in redeem_code_data.get(
-                                            "code_value"
-                                        ):
-
-                                            await change_user_subscription(
-                                                bot=self_bot,
-                                                user_id=ctx.author.id,
-                                                subscription=redeem_code_data.get(
-                                                    "code_value"
-                                                ),
-                                                valid_for_days=redeem_code_data.get(
-                                                    "valid_for_days", None
-                                                ),
-                                            )
-
-                                        else:
-
-                                            await interaction.edit_original_response(
-                                                embed=discord.Embed(
-                                                    description="Invalid Redeem Code Value",
-                                                    color=color.red,
-                                                )
-                                            )
-
-                                            return
-
-                                        await storage.redeem_codes.update(
-                                            id=redeem_code_data.get("id"),
-                                            claimed=True,
-                                            claimed_by=ctx.author.id,
-                                            claimed_at=datetime.datetime.now(),
-                                        )
-
-                                        await interaction.edit_original_response(
-                                            embed=discord.Embed(
-                                                description=f"{self_bot.emoji.SUCCESS} Redeem Code Claimed Successfully",
-                                                color=color.green,
-                                            )
-                                        )
-
-                                    except Exception as e:
-
-                                        logger.error(
-                                            f"Error in file {__file__} at line {traceback.extract_tb(sys.exc_info()[2])[0][1]}: {e}"
-                                        )
-
-                                embed = await get_embed()
-
-                                view = await get_view()
-
-                                message = await interaction.followup.send(
-                                    embed=embed, view=view, ephemeral=True
-                                )
-
-                                await interaction.message.delete()
-
-                            except Exception as e:
-
-                                logger.error(
-                                    f"Error in file {__file__} at line {traceback.extract_tb(sys.exc_info()[2])[0][1]}: {e}"
-                                )
-
-                    await interaction.response.send_modal(enter_code_modal())
-
-                except Exception as e:
-
-                    logger.error(
-                        f"Error in file {__file__} at line {traceback.extract_tb(sys.exc_info()[2])[0][1]}: {e}"
-                    )
-
-            message = await ctx.send(embed=embed, view=view)
-
-            while not cancled:
-
-                timeout_time -= 1
-
-                if timeout_time <= 0:
-
-                    await message.edit(
-                        view=None, content="You took too long to respond"
-                    )
-
-                    break
-
-                await asyncio.sleep(1)
-
-        except Exception as e:
-
-            logger.error(
-                f"Error in file {__file__} at line {traceback.extract_tb(sys.exc_info()[2])[0][1]}: {e}"
-            )
+    async def redeem(self, ctx: commands.Context, code: str = None):
+        from kuroo.workflows import premium
+        from kuroo.src.commands.premium import can_claim
+
+        async def claim(value, send, member=None):
+            try:
+                record = await premium.redeem(value, ctx.author.id, ctx.guild.id, bot=self.bot,
+                                              can_manage_guild=can_claim(member or ctx.author))
+            except premium.PremiumError as error:
+                await send(str(error))
+                return
+            if record is None:
+                await send("No-prefix subscription code redeemed.")
+            else:
+                end = record.get('subscription_end')
+                expiry = f'<t:{int(end.timestamp())}:F>' if end else 'Lifetime'
+                await send(f"Server premium activated. Expires: {expiry}.")
+
+        if code:
+            await ctx.defer(ephemeral=True)
+            await claim(code, lambda text: ctx.send(text, ephemeral=True))
+            return
+
+        class RedeemModal(discord.ui.Modal, title="Redeem premium"):
+            code_input = discord.ui.TextInput(label="Redeem code", max_length=100)
+
+            async def on_submit(self, interaction):
+                await interaction.response.defer(ephemeral=True)
+                await claim(self.code_input.value,
+                            lambda text: interaction.followup.send(text, ephemeral=True), interaction.user)
+
+        class RedeemView(discord.ui.View):
+            @discord.ui.button(label="Enter code", style=discord.ButtonStyle.primary)
+            async def enter(self, interaction, button):
+                if interaction.user.id != ctx.author.id:
+                    await interaction.response.send_message("Run your own `/redeem` command.", ephemeral=True)
+                    return
+                await interaction.response.send_modal(RedeemModal())
+
+        if ctx.interaction:
+            await ctx.interaction.response.send_modal(RedeemModal())
+        else:
+            await ctx.send("Enter your redeem code privately using the button below, or use `/redeem`.",
+                           view=RedeemView(timeout=120))
 
     async def JoinToCreateVC_Module(self, ctx: commands.Context):
 

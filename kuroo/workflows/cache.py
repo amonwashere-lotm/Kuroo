@@ -77,6 +77,7 @@ from storage import music as music_db
 
 
 from kuroo.memory.cache import cache
+from kuroo.workflows.premium_state import GuildCache
 
 
 from kuroo.console.logging import logger
@@ -89,7 +90,7 @@ class Guilds:
 
     def __init__(self):
 
-        cache.guilds = {}
+        cache.guilds = GuildCache()
 
     async def initialize(self):
 
@@ -169,6 +170,9 @@ class Users:
         if str(user_id) in cache.users:
 
             del cache.users[str(user_id)]
+            for ids in (cache.admins, cache.owners):
+                if user_id in ids:
+                    ids.remove(user_id)
 
             logger.database(f"User - {user_id} cache deleted âœ…")
 
@@ -189,6 +193,11 @@ class Users:
             return
 
         cache.users[str(user_id)] = data
+        for ids, role in ((cache.admins, 'admin'), (cache.owners, 'owner')):
+            if user_id in ids:
+                ids.remove(user_id)
+            if data.get('type') == role:
+                ids.append(user_id)
 
         logger.database(f"User - {user_id} cache updated âœ…")
 

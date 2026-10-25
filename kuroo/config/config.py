@@ -16,6 +16,8 @@ class BotConfigClass:
     DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
     DASHBOARD_SECRET = os.getenv("DASHBOARD_SECRET", "")
     DASHBOARD_BASE_URL = os.getenv("DASHBOARD_BASE_URL", f"http://localhost:{WEB_PORT}")
+    TOPGG_WEBHOOK_SECRET = os.getenv("TOPGG_WEBHOOK_SECRET", "")
+    BOT_BANNER_URL = os.getenv("BOT_BANNER_URL", "")
     API_HOST = WEB_HOST
     API_PORT = WEB_PORT
     SYNC_EMOJIS = os.getenv("SYNC_EMOJIS", "True").lower() == "true"

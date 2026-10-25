@@ -129,12 +129,79 @@ Login with Discord, choose a server you manage, and configure it from the dashbo
 - The music page updates live while the bot is running.
 - The server language setting affects the help menu output.
 
+## Premium and bot admin commands
+
+All commands below support both slash commands and the configured prefix (default `?`).
+Bot admins are the IDs in `DEVELOPER_IDS`, plus stored users with the bot's `admin`
+or `owner` type. A Discord server's Administrator permission does not make someone
+a bot admin.
+
+| Command | Access | Behavior |
+| --- | --- | --- |
+| `/premiumcode` | Bot admins | Generate a single-use Diamond server premium code. Redeem within 12 hours; premium lasts 24 hours from redemption. Prefix invocation delivers the code by DM. |
+| `/premiumgrant guild_id:<server ID> days:1` | Bot admins | Grant Diamond premium to any server ID, for 1–3650 days. |
+| `/premiumrevoke guild_id:<server ID>` | Bot admins | Revoke that server's premium and restore free-tier limits. |
+| `/redeem` | Manage Server or bot admins for new one-day server codes | Open a private code-entry modal. An optional `code` argument is also supported. Legacy codes retain their existing access rules. |
+| `/vote` | Everyone | Show the Top.gg vote link and reward instructions. |
+| `/votepremium` | Manage Server or bot admins | Claim the latest verified vote for this server. One vote rewards one server, until 12 hours after the vote. |
+| `/noprefix off` / `/noprefix on` | Bot admins or active no-prefix subscribers | Disable or enable your own no-prefix preference. With no argument, toggle it. |
+
+Bot admins have no-prefix access by default, including in DMs. Their explicit
+preference survives restarts. Prefix and slash commands remain available when
+no-prefix is disabled. Existing paid no-prefix users keep their subscription rules.
+
+New rewards guarantee premium through their stated expiry; they do not stack on
+an existing longer subscription or downgrade a higher/lifetime tier. Existing
+legacy codes retain their original tier, duration, and lifetime behavior. Premium
+checks treat expired cached subscriptions as free immediately; a 30-second sweep
+persists expiration and restores free-tier limits. An admin revocation also blocks
+retries of rewards claimed before that revocation.
+
+### Top.gg vote setup
+
+1. Set the correct `DISCORD_CLIENT_ID` and list the bot on Top.gg.
+2. In the Top.gg project's **Webhooks** settings, add the public HTTPS endpoint
+   `https://your-host/webhooks/topgg`, using **v1** webhooks.
+3. Copy the generated `whs_...` signing secret into `TOPGG_WEBHOOK_SECRET` in `.env`.
+4. Restart the bot. The web server runs when this secret is configured, including
+   when `DASHBOARD_ENABLED=False`. Expose the configured `WEB_PORT` through your HTTPS host.
+5. Send a Top.gg webhook test to check reachability. Test events never award premium.
+   After a real vote, use `/votepremium` in the server to receive the reward.
+
+The handler verifies the `x-topgg-signature` HMAC against the raw body, rejects
+stale signatures and votes for another bot, and deduplicates vote IDs in MongoDB.
+Weekend vote weight does not increase the 12-hour reward. Legacy v0 shared-secret
+webhooks are not supported by this endpoint.
+
+The old HTTP `/redeem/generate/` endpoint is disabled (410); use the bot-admin-only
+`/premiumcode` command. The original owner-only `generate` menu remains available
+for legacy subscription code types.
+
+### Help banner
+
+Upload a banner for the bot's Discord profile, or set `BOT_BANNER_URL` to a public
+HTTPS image URL. Help fetches the bot's banner and places it above every help page
+as a Components V2 media gallery. If no banner exists, help still works without it.
+Restart the bot after changing an uploaded banner or the override.
+
+### Database upgrade
+
+Guild premium updates require one database record per `guild_id`. Startup creates
+a unique index and fails if an older database contains duplicate guild records;
+resolve duplicates before starting the upgraded bot. No records are automatically deleted.
+
 ## Development checks
 
 ```bash
 python -m unittest discover -s tests -v
 python -m compileall -q main.py kuroo storage tests
+
+# Include real MongoDB integration tests using a disposable local MongoDB 8 instance:
+KUROO_TEST_MONGO_URI=mongodb://127.0.0.1:27018 python -m unittest discover -s tests -v
 ```
+
+Mongo tests create and delete random `kuroo_test_*` databases, using synthetic
+identities. Without `KUROO_TEST_MONGO_URI`, those integration tests are skipped.
 
 `discord.py==2.6.4` is pinned because the shared V2 renderer wraps its message
 serializers. Run the transport tests before changing that dependency. Gateway

@@ -18,54 +18,19 @@ check_guilds_subscription_running = False
 async def check_guilds_subscription(bot: AutoShardedBot):
     global check_guilds_subscription_running
     if check_guilds_subscription_running:
-        return logger.warning("Subscription check is already running")
+        return
     check_guilds_subscription_running = True
-    while not bot.is_ready():
-        await asyncio.sleep(1)
-    # logger.info("Checking Subscriptions")
-    while True:
-        for guild_id,data in cache.guilds.items():
-            if data.get('subscription') == 'free':
-                continue
-            if not data.get('subscription_end'):
-                logger.warning(f"Infinite subscription found for guild {guild_id}")
-                continue
-            
-            # if subscription has less than 3 days left notify the owner
-            if data.get('subscription_end',datetime.datetime.now()).astimezone() < datetime.datetime.now().astimezone() + datetime.timedelta(days=3) and data.get('subscription_end',datetime.datetime.now()).astimezone() > datetime.datetime.now().astimezone():
-                logger.info(f"Subscription ending soon for guild {guild_id}")
-                try:
-                    guild = await bot.fetch_guild(int(guild_id))
-                    if guild:
-                        guild_cache = cache.guilds.get(str(guild.id))
-                        owners = [guild.owner]
-                        for extra_owner_id in guild_cache.get('extra_owner_ids', []):
-                            owner = await bot.fetch_user(extra_owner_id)
-                            if owner:
-                                owners.append(owner)
-                        for owner in owners:
-                            try:
-                                await owner.send(f"Your subscription for {guild.name} is ending in less than 3 days, please renew it.")
-                            except:
-                                logger.error(f"Error sending message to owner of guild {guild_id} - {owner.id}")
-                    else:
-                        logger.error(f"Guild {guild_id} not found")
-                except Exception as e:
-                    logger.warning(f"Error sending message to owner of guild {guild_id}: {e}")
-
-            if data.get('subscription_end',datetime.datetime.now()).astimezone() > datetime.datetime.now().astimezone():
-                logger.info(f"Subscription has not ended for guild {guild_id}")
-                continue
-            
-            logger.warning(f"Subscription ended for guild {guild_id}")
-
-            await change_guild_subscription(
-                bot=bot,
-                guild_id=int(guild_id),
-                subscription='free',
-                valid_for_days=None
-            )
-        await asyncio.sleep(12*60*60)
+    from kuroo.workflows.premium import expire
+    try:
+        await bot.wait_until_ready()
+        while not bot.is_closed():
+            try:
+                await expire()
+            except Exception:
+                logger.error("Premium expiration sweep failed; retrying in 30 seconds")
+            await asyncio.sleep(30)
+    finally:
+        check_guilds_subscription_running = False
 
 check_users_subscription_running = False
 async def check_users_subscription(bot: AutoShardedBot):

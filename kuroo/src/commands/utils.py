@@ -1,3 +1,4 @@
+from typing import Literal
 import discord
 
 
@@ -241,7 +242,7 @@ class Utils(commands.Cog):
 
             embed = discord.Embed(
                 title="Vote",
-                description="Heads Up! You Can Vote For Me By Clicking The Button Below.\nPlease Make Sure You Follow The Rules Of The Voting Site.\nWe hope you enjoy using our bot.",
+                description="Vote on Top.gg, then run `/votepremium` in a server you manage.\nEach vote unlocks Diamond server premium until 12 hours after the vote.\nA vote can reward one server.",
                 color=color.green,
             )
 
@@ -1155,211 +1156,24 @@ class Utils(commands.Cog):
                 f"Error in file {__file__} at line {traceback.extract_tb(sys.exc_info()[2])[0][1]}: {e}"
             )
 
-    @commands.hybrid_command(
-        name="noprefix",
-        with_app_command=True,
-        help="Enable/Disable The No Prefix Feature",
-        aliases=["np"],
-    )
-    @checks.ignore_check()
-    @checks.blacklist_check()
-    @commands.cooldown(rate=2, per=15, type=commands.BucketType.user)
-    async def noprefix_command(self, ctx: commands.Context):
-
-        try:
-
-            async def get_embed():
-
-                users_cache = cache.users.get(str(ctx.author.id), {})
-
-                embed = discord.Embed(
-                    title="No Prefix Feature",
-                    color=color.green if users_cache.get("no_prefix") else color.red,
-                )
-
-                embed.description = f"**__Status:__** {self.bot.emoji.ENABLED if users_cache.get('no_prefix') else self.bot.emoji.DISABLED}"
-
-                embed.description += f"\n**__Subscription:__** {self.bot.emoji.ENABLED if users_cache.get('no_prefix_subscription') else self.bot.emoji.DISABLED}"
-
-                if users_cache.get("no_prefix_subscription"):
-
-                    subscription_end = users_cache.get("no_prefix_end")
-
-                    subscription_end_text = (
-                        f"<t:{int(subscription_end.timestamp())}:R>"
-                        if subscription_end
-                        else "`Never`"
-                    )
-
-                    embed.description += (
-                        f"\n**__Subscription Ends:__** {subscription_end_text}"
-                    )
-
-                embed.set_thumbnail(url=ctx.author.display_avatar.url)
-
-                return embed
-
-            timeout_time = 60
-
-            cancled = False
-
-            def reset_timeout_time(timeout: int = 60):
-
-                nonlocal timeout_time
-
-                timeout_time = timeout
-
-            async def get_view(disabled=False):
-
-                users_cache = cache.users.get(str(ctx.author.id), {})
-
-                view = discord.ui.View(timeout=60)
-
-                reset_timeout_time()
-
-                enable_disable_button = discord.ui.Button(
-                    label=(
-                        "Click To Enable"
-                        if not users_cache.get("no_prefix")
-                        else "Click To Disable"
-                    ),
-                    style=(
-                        discord.ButtonStyle.green
-                        if not users_cache.get("no_prefix")
-                        else discord.ButtonStyle.gray
-                    ),
-                    row=0,
-                    emoji=(
-                        self.bot.emoji.ENABLED
-                        if not users_cache.get("no_prefix")
-                        else self.bot.emoji.DISABLED
-                    ),
-                )
-
-                enable_disable_button.callback = (
-                    lambda i: enable_disable_button_callback(i)
-                )
-
-                enable_disable_subscription_button = discord.ui.Button(
-                    label="Subscription Required",
-                    style=discord.ButtonStyle.link,
-                    url=self.bot.urls.SUPPORT_SERVER,
-                    row=0,
-                    emoji=self.bot.emoji.SUPPORT,
-                )
-
-                cancle_button = discord.ui.Button(
-                    label="Cancel",
-                    style=discord.ButtonStyle.gray,
-                    row=0,
-                    emoji=self.bot.emoji.CANCLED,
-                )
-
-                cancle_button.callback = lambda i: cancle_button_callback(i)
-
-                if users_cache.get("no_prefix_subscription", False):
-
-                    view.add_item(enable_disable_button)
-
-                    view.add_item(cancle_button)
-
-                else:
-
-                    view.add_item(enable_disable_subscription_button)
-
-                    nonlocal cancled
-
-                    cancled = True
-
-                if disabled:
-
-                    for item in view.children:
-
-                        item.disabled = True
-
-                return view
-
-            async def cancle_button_callback(interaction: discord.Interaction):
-
-                try:
-
-                    if interaction.user.id != ctx.author.id:
-
-                        return await interaction.response.send_message(
-                            embed=discord.Embed(
-                                description="You Can't Interact With This Button",
-                                color=color.red,
-                            ),
-                            ephemeral=True,
-                            delete_after=10,
-                        )
-
-                    nonlocal cancled
-
-                    cancled = True
-
-                    await interaction.response.edit_message(view=await get_view(True))
-
-                except Exception as e:
-
-                    logger.error(
-                        f"Error in file {__file__} at line {traceback.extract_tb(sys.exc_info()[2])[0][1]}: {e}"
-                    )
-
-            async def enable_disable_button_callback(interaction: discord.Interaction):
-
-                try:
-
-                    if interaction.user.id != ctx.author.id:
-
-                        return await interaction.response.send_message(
-                            embed=discord.Embed(
-                                description="You Can't Interact With This Button",
-                                color=color.red,
-                            ),
-                            ephemeral=True,
-                            delete_after=10,
-                        )
-
-                    await interaction.response.defer()
-
-                    users_cache = cache.users.get(str(ctx.author.id), {})
-
-                    await storage.users.update(
-                        id=users_cache.get("id"),
-                        user_id=ctx.author.id,
-                        no_prefix=not users_cache.get("no_prefix"),
-                    )
-
-                    await interaction.message.edit(
-                        embed=await get_embed(), view=await get_view()
-                    )
-
-                except Exception as e:
-
-                    logger.error(
-                        f"Error in file {__file__} at line {traceback.extract_tb(sys.exc_info()[2])[0][1]}: {e}"
-                    )
-
-            message = await ctx.send(embed=await get_embed(), view=await get_view())
-
-            while not cancled:
-
-                timeout_time -= 1
-
-                if timeout_time <= 0:
-
-                    await message.edit(view=await get_view(True))
-
-                    break
-
-                await asyncio.sleep(1)
-
-        except Exception as e:
-
-            logger.error(
-                f"Error in file {__file__} at line {traceback.extract_tb(sys.exc_info()[2])[0][1]}: {e}"
-            )
+    @commands.hybrid_command(name="noprefix", aliases=["np"], help="Toggle no-prefix, or choose on/off")
+    async def noprefix_command(self, ctx: commands.Context, mode: Literal['on', 'off'] = None):
+        from kuroo.workflows.premium_state import utc
+        user = cache.users.get(str(ctx.author.id), {})
+        is_admin = checks.check_is_admin_predicate(ctx.author)
+        end = user.get('no_prefix_end')
+        subscribed = user.get('no_prefix_subscription') and (not end or utc(end) > datetime.datetime.now(datetime.timezone.utc))
+        if not is_admin and not subscribed:
+            await ctx.send('A no-prefix subscription is required.', ephemeral=True)
+            return
+        key = 'admin_no_prefix' if is_admin else 'no_prefix'
+        current = user.get(key, is_admin)
+        enabled = mode == 'on' if mode is not None else not current
+        if not user:
+            user = await storage.users.insert(user_id=ctx.author.id)
+        await storage.users._store.update({'id': user['id'], key: enabled})
+        await ctx.send(f"No-prefix is now {'enabled' if enabled else 'disabled'}. "
+                       f"Use `{self.bot.BotConfig.PREFIX}noprefix on` to enable it again.", ephemeral=True)
 
     @commands.hybrid_command(
         name="afk",

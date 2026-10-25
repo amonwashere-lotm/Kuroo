@@ -1,7 +1,8 @@
 from kuroo.config.config import users as users_config
+from kuroo.workflows.premium_state import GuildCache
 
 class cache:
-    guilds = {}
+    guilds = GuildCache()
     guilds_log = {}
     users = {}
     j2c = {}
