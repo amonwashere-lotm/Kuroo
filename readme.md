@@ -48,7 +48,7 @@ See the [original project](https://github.com/RayExo/Reo-Bot) for its screenshot
 
 ## Stack
 
-- Python 3.12 or newer
+- Python 3.11 or newer
 - `discord.py`
 - `wavelink`
 - FastAPI

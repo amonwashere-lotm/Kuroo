@@ -350,6 +350,15 @@ class CommunityBoundaryTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(commands.DisabledCommand):
                 await Community(None).cog_check(ctx)
 
+    async def test_level_settings_display_announcement_channel_and_disabled_state(self):
+        ctx = SimpleNamespace(guild=SimpleNamespace(id=1), defer=AsyncMock(), send=AsyncMock())
+        for channel_id, expected in [(42, '<#42>'), (0, 'disabled')]:
+            config = community.LEVEL_DEFAULTS | {'level_channel': channel_id}
+            with patch.object(community, 'level_settings', new=AsyncMock(return_value=config)):
+                await Community.levelconfig.callback(Community(None), ctx)
+            self.assertIn(f'Announcements: {expected}', ctx.send.await_args.args[0])
+            self.assertFalse(ctx.send.await_args.kwargs['allowed_mentions'].roles)
+
     async def test_announcement_channel_alias_and_disable_use_same_configuration(self):
         ctx = SimpleNamespace(guild=SimpleNamespace(id=1), defer=AsyncMock(), send=AsyncMock())
         cog = Community(None)

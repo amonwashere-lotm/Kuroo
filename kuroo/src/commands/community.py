@@ -187,9 +187,10 @@ class Community(commands.Cog):
         config = await community.level_settings(ctx.guild.id)
         channels = ', '.join(f'<#{value}>' for value in config['xp_ignored_channels']) or 'None'
         roles = ', '.join(f'<@&{value}>' for value in config['xp_ignored_roles']) or 'None'
+        announcement_channel = f"<#{config['level_channel']}>" if config['level_channel'] else 'disabled'
         await ctx.send(f"## Leveling settings\nMessage XP: **{'on' if config['leveling'] else 'off'}**"
                        f"\nXP per message: **{config['xp_amount']}** · Cooldown: **{config['xp_cooldown']} seconds**"
-                       f"\nAnnouncements: {f'<#{config["level_channel"]}>' if config['level_channel'] else 'disabled'}"
+                       f"\nAnnouncements: {announcement_channel}"
                        f"\nMessage: {config['level_message']}\nExcluded channels: {channels}\nExcluded roles: {roles}"
                        '\nUse `/levelconfig announcements` to choose an announcement channel.', ephemeral=True,
                        allowed_mentions=discord.AllowedMentions.none())
