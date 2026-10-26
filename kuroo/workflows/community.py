@@ -44,6 +44,9 @@ async def prepare():
     levels = await get_collection('member_levels')
     await levels.create_index([('guild_id', 1), ('user_id', 1)], unique=True)
     await levels.create_index([('guild_id', 1), ('xp', -1), ('user_id', 1)])
+    for period in ('daily', 'weekly', 'monthly'):
+        await levels.create_index([('guild_id', 1), (f'activity.{period}.start', 1),
+                                   (f'activity.{period}.xp', -1), ('user_id', 1)])
     users = await get_collection('users')
     await users.create_index('user_id', unique=True, sparse=True, name='users_user_id_unique')
     await users.create_index([('balance', -1), ('user_id', 1)])
@@ -151,6 +154,27 @@ async def reset_earn_cooldown(user_id, kind):
     return await _publish(record)
 
 
+def period_start(period, stamp=None):
+    stamp = stamp or now()
+    stamp = stamp.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    if period == 'daily':
+        return stamp
+    if period == 'weekly':
+        return stamp - timedelta(days=stamp.weekday())
+    if period == 'monthly':
+        return stamp.replace(day=1)
+    raise CommunityError('Choose daily, weekly or monthly.')
+
+
+async def period_leaderboard(guild_id, period):
+    start = period_start(period)
+    field = f'activity.{period}'
+    collection = await get_collection('member_levels')
+    rows = await collection.find({'guild_id': guild_id, f'{field}.start': start, f'{field}.xp': {'$gt': 0}}).sort(
+        [(f'{field}.xp', -1), ('user_id', 1)]).limit(10).to_list(length=10)
+    return [dict(user_id=row['user_id'], xp=row['activity'][period]['xp'], level=level_for_xp(row['xp'])) for row in rows]
+
+
 async def award_xp(guild_id, user_id):
     config = await level_settings(guild_id)
     if not config['leveling']:
@@ -162,9 +186,19 @@ async def award_xp(guild_id, user_id):
     except DuplicateKeyError:
         pass
     stamp = now()
+    # Update lifetime XP and all three period counters in the same atomic write.
+    # Admin adjustments never count as activity; only XP actually earned is scored.
+    total = {'$min': [MAX_AMOUNT, {'$add': ['$xp', config['xp_amount']]}]}
+    delta = {'$subtract': [total, '$xp']}
+    updates = {'xp': total, 'xp_at': stamp}
+    for period in ('daily', 'weekly', 'monthly'):
+        start = period_start(period, stamp)
+        field = f'activity.{period}'
+        updates[field] = {'start': start, 'xp': {'$add': [delta, {'$cond': [
+            {'$eq': [f'${field}.start', start]}, {'$ifNull': [f'${field}.xp', 0]}, 0]}]}}
     before = await collection.find_one_and_update(
         dict(key, **{'$or': [{'xp_at': None}, {'xp_at': {'$lte': stamp - timedelta(seconds=config['xp_cooldown'])}}]}),
-        [{'$set': {'xp': {'$min': [MAX_AMOUNT, {'$add': ['$xp', config['xp_amount']]}]}, 'xp_at': stamp}}],
+        [{'$set': updates}],
         return_document=ReturnDocument.BEFORE,
     )
     if before is None:

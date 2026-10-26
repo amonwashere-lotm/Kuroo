@@ -22,7 +22,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             self.assertGreater(len(bot.tree.get_commands()), 60)
             self.assertIn('help', bot.all_commands)
             self.assertIsNotNone(bot.tree.get_command('help'))
-            for name in ('premiumcode', 'premiumgrant', 'premiumrevoke', 'votepremium', 'redeem', 'noprefix', 'rank', 'lb', 'daily', 'work', 'balance', 'deposit', 'withdraw', 'shop', 'buy', 'inventory', 'equip', 'leveling', 'levelchannel', 'welcomecards', 'leave', 'welcomepreview', 'leavepreview', 'levelconfig', 'xp', 'economy'):
+            for name in ('premiumcode', 'premiumgrant', 'premiumrevoke', 'votepremium', 'redeem', 'noprefix', 'rank', 'lb', 'daily', 'work', 'balance', 'deposit', 'withdraw', 'shop', 'buy', 'inventory', 'equip', 'leveling', 'levelchannel', 'welcomecards', 'leave', 'welcomepreview', 'leavepreview', 'levelconfig', 'xp', 'economy', 'levelreward', 'liveleaderboard'):
                 self.assertIn(name, bot.all_commands)
                 self.assertIsNotNone(bot.tree.get_command(name))
             # Validate the exact definitions sent by tree.sync, including nested options.
@@ -38,7 +38,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
                     validate(item.get('options', []))
             validate(definitions)
             for path in [('levelconfig', 'announcements'), ('levelconfig', 'ignorechannel'),
-                         ('levelconfig', 'rate'), ('xp', 'edit'), ('economy', 'rewards')]:
+                         ('levelconfig', 'rate'), ('xp', 'edit'), ('economy', 'rewards'), ('levelreward', 'set'), ('liveleaderboard', 'set')]:
                 command = bot.tree.get_command(path[0]).get_command(path[1])
                 self.assertIsNotNone(command)
                 self.assertIsNotNone(bot.get_command(' '.join(path)))

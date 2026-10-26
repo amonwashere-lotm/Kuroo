@@ -6,12 +6,13 @@ from types import SimpleNamespace
 from typing import Literal
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 import storage.welcomer_settings
 from kuroo.console.logging import logger
 from kuroo.src.checks import checks
-from kuroo.workflows import cards, community
+from kuroo.workflows import cards, community, leveling
+from kuroo.workflows.live_leaderboards import LiveLeaderboards
 
 
 def manager():
@@ -31,8 +32,55 @@ async def send_card(destination, data, filename, caption):
 class Community(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.live_boards = LiveLeaderboards(bot)
         self.cog_info = SimpleNamespace(name='Community', category='Extra', description='Levels, rank cards, coins and member cards',
                                        hidden=False, emoji='🌙')
+
+    def cog_unload(self):
+        self.live_refresh.cancel()
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        if not self.live_refresh.is_running():
+            self.live_refresh.start()
+
+    @tasks.loop(seconds=60)
+    async def live_refresh(self):
+        try:
+            await self.live_boards.refresh_all()
+        except Exception as error:
+            logger.warning(f'Live leaderboard scan failed ({type(error).__name__}); it will retry next minute.')
+
+    @live_refresh.before_loop
+    async def wait_for_ready(self):
+        await self.bot.wait_until_ready()
+
+    async def _award_roles(self, member, level):
+        if member.guild.me is None or not member.guild.me.guild_permissions.manage_roles:
+            return []
+        entries = await leveling.active_rewards(member.guild.id)
+        earned = []
+        for entry in entries:
+            role = member.guild.get_role(entry['role_id'])
+            if entry['level'] > level or role is None or role in member.roles or not role.is_assignable():
+                continue
+            try:
+                # add_roles uses Discord's additive role route, preserving other roles.
+                await member.add_roles(role, reason=f'Kuroo level {entry["level"]} reward')
+                earned.append(role.id)
+            except discord.HTTPException:
+                logger.warning('Could not assign a level reward; check Manage Roles and the role hierarchy.')
+        return earned
+
+    def _check_reward_role(self, ctx, role):
+        if (ctx.guild.me is None or not ctx.guild.me.guild_permissions.manage_roles
+                or role.guild.id != ctx.guild.id or role.is_default() or role.managed or not role.is_assignable()):
+            raise community.CommunityError('Choose a regular role below my highest role, and give me Manage Roles.')
+        if not checks.check_is_admin_predicate(ctx.author):
+            if not ctx.author.guild_permissions.manage_roles:
+                raise community.CommunityError('Manage Roles permission is also required to configure reward roles.')
+            if ctx.author.id != ctx.guild.owner_id and role >= ctx.author.top_role:
+                raise community.CommunityError('Reward roles must be below your highest role.')
 
     async def cog_check(self, ctx):
         if ctx.guild is None:
@@ -69,6 +117,8 @@ class Community(commands.Cog):
                 return
             result = await community.award_xp(message.guild.id, message.author.id)
             channel = message.guild.get_channel(settings.get('level_channel', 0))
+            if result and result['leveled_up']:
+                await self._award_roles(message.author, result['level'])
             if result and result['leveled_up'] and channel:
                 template = settings.get('level_message', community.LEVEL_DEFAULTS['level_message'])
                 announcement = template.format(user=discord.utils.escape_markdown(message.author.display_name),
@@ -192,7 +242,79 @@ class Community(commands.Cog):
                       amount: commands.Range[int, 0, community.MAX_AMOUNT]):
         await ctx.defer(ephemeral=True)
         result = await community.edit_xp(ctx.guild.id, member.id, amount, mode=action)
+        await self._award_roles(member, result['level'])
         await ctx.send(f'{discord.utils.escape_markdown(member.display_name)} now has **{result["xp"]:,} XP** · Level **{result["level"]}**.', ephemeral=True)
+
+    @commands.hybrid_group(name='levelreward', invoke_without_command=True, fallback='list',
+                           help='List level reward roles; the first 10 slots are free', extras={'category': 'Leveling'})
+    async def levelreward(self, ctx):
+        await ctx.defer()
+        entries = await leveling.rewards(ctx.guild.id)
+        active = await leveling.active_rewards(ctx.guild.id)
+        active_ids = {entry['role_id'] for entry in active}
+        lines = [f'Level **{entry["level"]:,}** → <@&{entry["role_id"]}>'
+                 + (' · paused (premium required)' if entry['role_id'] not in active_ids else '') for entry in entries]
+        await ctx.send('## Level reward roles\n' + ('\n'.join(lines) or 'No rewards configured.')
+                       + '\nFirst 10 roles are free; additional roles require server premium. Use `/levelreward claim` for earned roles.',
+                       allowed_mentions=discord.AllowedMentions.none())
+
+    @levelreward.command(name='set', help='Managers with Manage Roles: set a role’s minimum level; 10 free slots')
+    @manager()
+    async def levelreward_set(self, ctx, level: commands.Range[int, 1, 1000000], role: discord.Role):
+        await ctx.defer(ephemeral=True)
+        self._check_reward_role(ctx, role)
+        await leveling.set_reward(ctx.guild.id, role.id, level)
+        await ctx.send(f'Level **{level:,}** rewards {role.mention}. Existing qualified members can use `/levelreward claim`.',
+                       ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+    @levelreward.command(name='remove', help='Managers with Manage Roles: remove a reward using a role mention or ID')
+    @manager()
+    async def levelreward_remove(self, ctx, role: str):
+        await ctx.defer(ephemeral=True)
+        # Removing configuration never removes earned roles, so it is safe even if hierarchy changed.
+        if not checks.check_is_admin_predicate(ctx.author) and not ctx.author.guild_permissions.manage_roles:
+            raise community.CommunityError('Manage Roles permission is also required to configure reward roles.')
+        token = role.removeprefix('<@&').removesuffix('>')
+        if not token.isascii() or not token.isdigit() or not 0 < int(token) < 2**64:
+            raise community.CommunityError('Provide a role mention or role ID, including the ID of a deleted role.')
+        await leveling.remove_reward(ctx.guild.id, int(token))
+        await ctx.send('Reward removed. Already-earned roles are retained.', ephemeral=True)
+
+    @levelreward.command(name='claim', help='Claim every active reward role you have already earned')
+    @commands.cooldown(1, 30, commands.BucketType.member)
+    async def levelreward_claim(self, ctx):
+        await ctx.defer(ephemeral=True)
+        rank = await community.rank(ctx.guild.id, ctx.author.id)
+        earned = await self._award_roles(ctx.author, rank['level'])
+        await ctx.send(f'Added **{len(earned)}** earned role(s). Roles already held are retained. '
+                       'If a role is missing, ask a manager to check its level, premium status and role hierarchy.', ephemeral=True)
+
+    @commands.hybrid_group(name='liveleaderboard', invoke_without_command=True, fallback='status',
+                           help='Manage live daily, weekly and monthly Pillow XP leaderboards', extras={'category': 'Leveling'})
+    @manager()
+    async def liveleaderboard(self, ctx):
+        await ctx.defer(ephemeral=True)
+        premium = await leveling.has_premium(ctx.guild.id)
+        configs = [entry async for entry in leveling.boards(ctx.guild.id)]
+        lines = [f'**{entry["period"].title()}** → <#{entry["channel_id"]}>'
+                 + (' · paused (premium required)' if entry['period'] != 'daily' and not premium else '') for entry in configs]
+        await ctx.send('## Live XP leaderboards\n' + ('\n'.join(lines) or 'No live channels configured.')
+                       + '\nUse `/liveleaderboard set channel period`. Daily is free; weekly/monthly require server premium. Refreshes every minute; periods use UTC.',
+                       ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+    @liveleaderboard.command(name='set', help='Post a live Pillow board in a required channel; weekly/monthly need premium')
+    @manager()
+    async def liveleaderboard_set(self, ctx, channel: discord.TextChannel, period: Literal['daily', 'weekly', 'monthly']):
+        await ctx.defer(ephemeral=True)
+        await self.live_boards.configure(ctx.guild, channel, period)
+        await ctx.send(f'{period.title()} live XP leaderboard created in {channel.mention}. Refreshes every minute.', ephemeral=True)
+
+    @liveleaderboard.command(name='remove', help='Stop and remove the live leaderboard for one period')
+    @manager()
+    async def liveleaderboard_remove(self, ctx, period: Literal['daily', 'weekly', 'monthly']):
+        await ctx.defer(ephemeral=True)
+        await self.live_boards.remove(ctx.guild.id, period)
+        await ctx.send(f'{period.title()} live leaderboard stopped.', ephemeral=True)
 
     @commands.hybrid_group(name='economy', invoke_without_command=True, fallback='show',
                            help='View economy settings and manage rewards', extras={'category': 'Economy'})

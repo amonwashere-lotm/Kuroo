@@ -326,7 +326,7 @@ class CommunityBoundaryTests(unittest.IsolatedAsyncioTestCase):
         message = SimpleNamespace(author=SimpleNamespace(id=100, bot=False, roles=[], display_name='A*'),
                                   guild=SimpleNamespace(id=1, name='Server', get_channel=lambda cid: channel),
                                   channel=SimpleNamespace(id=3), webhook_id=None, content='hello')
-        with patch('kuroo.workflows.community.settings', new=AsyncMock(return_value={'level_channel': 2, 'level_message': '{user} / {level} / {xp} / {server}'})), patch('kuroo.src.commands.community.checks.check_blacklist_predicate', return_value=True), patch('kuroo.src.commands.community.checks.check_ignore_predicate', return_value=True), patch('kuroo.workflows.community.award_xp', new=AsyncMock(return_value={'leveled_up': True, 'level': 2, 'xp': 400})):
+        with patch.object(Community, '_award_roles', new=AsyncMock(return_value=[])), patch('kuroo.workflows.community.settings', new=AsyncMock(return_value={'level_channel': 2, 'level_message': '{user} / {level} / {xp} / {server}'})), patch('kuroo.src.commands.community.checks.check_blacklist_predicate', return_value=True), patch('kuroo.src.commands.community.checks.check_ignore_predicate', return_value=True), patch('kuroo.workflows.community.award_xp', new=AsyncMock(return_value={'leveled_up': True, 'level': 2, 'xp': 400})):
             await Community(bot).on_message(message)
         self.assertIn('/ 2 / 400 / Server', channel.send.await_args.args[0])
         self.assertFalse(channel.send.await_args.kwargs['allowed_mentions'].everyone)

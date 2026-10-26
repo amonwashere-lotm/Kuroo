@@ -109,13 +109,13 @@ def rank_card(*, name, guild, xp, level, rank, avatar_bytes=None, title=None):
     return png(image)
 
 
-def leaderboard_card(*, guild, rows, page=1, pages=1, coins=False):
-    image, draw = canvas(1100, 960, 'Wallet leaderboard' if coins else 'Server leaderboard')
-    text(draw, (55, 103), 'The leaderboard', 38)
+def leaderboard_card(*, guild, rows, page=1, pages=1, coins=False, period=None):
+    image, draw = canvas(1100, 960, f'{period.title()} XP leaderboard' if period else 'Wallet leaderboard' if coins else 'Server leaderboard')
+    text(draw, (55, 103), f'{period.title()} leaderboard' if period else 'The leaderboard', 38)
     text(draw, (55, 159), 'Global wallet coins' if coins else guild, 19, MUTED, 980)
     text(draw, (63, 218), 'RANK', 13, MUTED)
     text(draw, (160, 218), 'MEMBER', 13, MUTED)
-    text(draw, (805, 218), 'COINS' if coins else 'LEVEL / XP', 13, MUTED)
+    text(draw, (805, 218), 'COINS' if coins else 'XP EARNED' if period else 'LEVEL / XP', 13, MUTED)
     for index, row in enumerate(rows[:10]):
         y = 257 + index * 61
         if index == 0:
@@ -125,7 +125,7 @@ def leaderboard_card(*, guild, rows, page=1, pages=1, coins=False):
         position = (page-1)*10 + index + 1
         text(draw, (63, y+3), f'{position:02}', 22, LAVENDER if position <= 3 else MUTED)
         text(draw, (160, y+3), row['name'], 21, width=600)
-        score = f"{row.get('balance', 0):,.0f}" if coins else f"LV {row['level']}  /  {row['xp']:,}"
+        score = f"{row.get('balance', 0):,.0f}" if coins else f"{row['xp']:,} XP" if period else f"LV {row['level']}  /  {row['xp']:,}"
         text(draw, (805, y+7), score, 16, LAVENDER, 235)
     if not rows:
         text(draw, (170, 420), 'A fresh start.', 34)

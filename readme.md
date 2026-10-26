@@ -214,6 +214,63 @@ All commands support both prefix and slash invocation; for prefix groups, omit
 | `/xp show [member]` | Anyone can view server XP and level without generating a card. |
 | `/xp edit member action amount` | Add, remove or set XP. `set 0` resets a member. Edits stay in this server, clamp at zero and 1 trillion XP, and do not send level announcements. |
 
+### Level reward roles
+
+| Command | What it does |
+| --- | --- |
+| `/levelreward list` | List configured reward roles, levels and any paused premium slots. Prefix: `?levelreward`. |
+| `/levelreward set level role` | Set a role's minimum level. Updating the same role uses the same slot. |
+| `/levelreward remove role` | Remove configuration using a role mention or ID (including deleted roles). Already-earned roles stay assigned. |
+| `/levelreward claim` | Members can claim all active rewards they already qualify for. |
+
+**10 distinct reward roles are free per server. More than 10 requires active server
+premium** (any premium tier, including timed vote/redeem rewards). Configuration
+requires Manage Server **and Manage Roles**, or bot-admin access. The selected role
+must be below both the configuring member's highest role and the bot's highest
+role; the server owner/bot admins can bypass the member hierarchy restriction.
+Discord-managed roles and @everyone cannot be rewards. The bot needs Manage Roles.
+
+Eligible roles are added when a member levels up or their XP is edited. Rewards
+stack; earlier rewards and unrelated roles stay assigned. Existing qualified
+members, or members whose role assignment failed, can use `/levelreward claim`.
+Configuration does not trigger a server-wide member scan. Lowering XP does not
+remove earned roles. After premium expires, only the first 10 rewards sorted by
+minimum level (then role ID) are active; extra configuration is retained and
+reactivates with premium. Already-earned roles stay assigned.
+
+### Live Pillow XP leaderboards
+
+| Command | What it does |
+| --- | --- |
+| `/liveleaderboard set channel period` | Post or replace a live top-10 XP image. **Channel and period are required.** Choose `daily`, `weekly` or `monthly`. |
+| `/liveleaderboard status` | Show configured channels and boards paused by expired premium. Prefix: `?liveleaderboard`. |
+| `/liveleaderboard remove period` | Stop one live board and delete its post when accessible. Available even after premium expires. |
+
+Manage Server permission or bot-admin access is required. **Daily is free; weekly
+and monthly require active server premium.** Each server can have one channel/post
+per period, including multiple periods in the same channel. Examples:
+
+```text
+/liveleaderboard set channel:#daily-ranks period:daily
+/liveleaderboard set channel:#weekly-ranks period:weekly
+?levelreward set 10 @Regular
+```
+
+Boards use the same black gradient Pillow style and Components V2 without accents.
+They refresh every **60 seconds**, edit the existing image when scores change or a
+period rolls over, and recreate deleted posts. Channel/message IDs persist across
+bot restarts. Moving a board replaces its old post when accessible. The bot needs
+View Channel, Send Messages, Attach Files and Read Message History in that channel.
+Missing permissions pause delivery until restored; one failing board does not stop
+others. Weekly/monthly updates pause when premium expires and resume after renewal.
+
+Scores count **message XP earned in the current UTC calendar period**: daily starts
+at 00:00 UTC; weekly starts Monday at 00:00 UTC; monthly starts on the 1st at 00:00
+UTC. XP cooldowns and exclusions still apply. Lifetime XP, reward eligibility and
+`/lb` are preserved. Manual `/xp edit` changes do not add or remove activity points.
+Period counters start collecting after this update is deployed; prior lifetime XP
+is not backfilled. Only current-period totals are retained, not historical archives.
+
 ### Economy controls
 
 Wallets remain **global**, so server managers cannot mint or edit coins. Bot admins
