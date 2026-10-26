@@ -158,6 +158,70 @@ class CommunityMongoTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse((await community.settings(1))['leveling'])
         self.assertEqual((await community.settings(1))['leave_channel'], 43)
 
+    async def test_configurable_xp_cooldown_and_disabled_state_persist(self):
+        await community.configure_levels(1, xp_amount=100, xp_cooldown=5)
+        result = await community.award_xp(1, 100)
+        self.assertEqual((result['xp'], result['level']), (100, 1))
+        self.assertIsNone(await community.award_xp(1, 100))
+        with patch('kuroo.workflows.community.now', return_value=T0 + timedelta(seconds=5)):
+            await community.award_xp(1, 100)
+        self.assertEqual((await community.rank(1, 100))['xp'], 200)
+        await community.configure(1, leveling=False)
+        with patch('kuroo.workflows.community.now', return_value=T0 + timedelta(hours=1)):
+            self.assertIsNone(await community.award_xp(1, 100))
+        for values in [dict(xp_amount=0), dict(xp_amount=True), dict(xp_cooldown=4)]:
+            with self.assertRaises(community.CommunityError):
+                await community.configure_levels(1, **values)
+
+    async def test_atomic_xp_edits_clamp_and_isolate_guilds(self):
+        await asyncio.gather(*[community.edit_xp(1, 100, 100, mode='add') for _ in range(10)])
+        self.assertEqual((await community.rank(1, 100))['xp'], 1000)
+        self.assertEqual((await community.rank(2, 100))['xp'], 0)
+        self.assertEqual((await community.edit_xp(1, 100, 5000, mode='remove'))['xp'], 0)
+        self.assertEqual((await community.edit_xp(1, 100, 400, mode='set'))['level'], 2)
+        await community.edit_xp(1, 100, community.MAX_AMOUNT, mode='add')
+        self.assertEqual((await community.rank(1, 100))['xp'], community.MAX_AMOUNT)
+        await community.award_xp(1, 100)
+        self.assertEqual((await community.rank(1, 100))['xp'], community.MAX_AMOUNT)
+
+    async def test_exclusions_and_message_configuration_are_persistent(self):
+        await asyncio.gather(*[community.xp_exclusion(1, 'channels', cid) for cid in [3, 3, 4]])
+        await community.xp_exclusion(1, 'roles', 9)
+        await community.xp_exclusion(1, 'channels', 3, remove=True)
+        await community.configure_levels(1, level_message='{user} in {server}: {level} / {xp}')
+        config = await community.level_settings(1)
+        self.assertEqual(config['xp_ignored_channels'], [4])
+        self.assertEqual(config['xp_ignored_roles'], [9])
+        for template in ['{user.id}', '{user!r}', '{xp:100000}', '{unknown}', '{', 'x'*1001]:
+            with self.assertRaises(community.CommunityError):
+                await community.configure_levels(1, level_message=template)
+
+    async def test_global_reward_configuration_respects_existing_claim_times(self):
+        await community.earn(100, 'daily')
+        await community.configure_rewards('daily', 1000, 1000, 60)
+        with self.assertRaises(community.CommunityError):
+            await community.earn(100, 'daily')
+        with patch('kuroo.workflows.community.now', return_value=T0 + timedelta(seconds=60)):
+            record, reward = await community.earn(100, 'daily')
+        self.assertEqual((record['balance'], reward), (1250, 1000))
+        await community.configure_rewards('work', 300, 300, 120)
+        self.assertEqual((await community.earn(100, 'work'))[1], 300)
+        for args in [('daily', 1, 2, 60), ('work', 20, 10, 60), ('work', 1, 2, 0)]:
+            with self.assertRaises(community.CommunityError):
+                await community.configure_rewards(*args)
+
+    async def test_admin_reward_reset_preserves_wallet_and_other_cooldown(self):
+        await community.earn(100, 'daily')
+        await community.earn(100, 'work')
+        before = await community.wallet(100)
+        await community.reset_earn_cooldown(100, 'daily')
+        self.assertEqual((await community.wallet(100))['balance'], before['balance'])
+        await community.earn(100, 'daily')
+        with self.assertRaises(community.CommunityError):
+            await community.earn(100, 'work')
+        await community.reset_earn_cooldown(100, 'all')
+        await community.earn(100, 'work')
+
 
 class CommunityBoundaryTests(unittest.IsolatedAsyncioTestCase):
     async def test_startup_sync_runs_before_cogs(self):
@@ -226,7 +290,6 @@ class CommunityBoundaryTests(unittest.IsolatedAsyncioTestCase):
             for changed in [{'guild': None}, {'author': SimpleNamespace(bot=True)}, {'webhook_id': 1}, {}]:
                 await cog.on_message(SimpleNamespace(**(base | changed)))
             award.assert_not_awaited()
-        cog.xp_cooldowns = commands_cooldown()
         bot.get_context.return_value = SimpleNamespace(valid=False)
         with patch('kuroo.src.commands.community.community.settings', new=AsyncMock(return_value={'leveling': False})), patch('kuroo.src.commands.community.checks.check_blacklist_predicate', return_value=True), patch('kuroo.src.commands.community.checks.check_ignore_predicate', return_value=True), patch('kuroo.src.commands.community.community.award_xp', new=AsyncMock()) as award:
             await cog.on_message(SimpleNamespace(**base))
@@ -244,7 +307,58 @@ class CommunityBoundaryTests(unittest.IsolatedAsyncioTestCase):
             await cog.on_message(message)
             award.assert_awaited_once_with(1, 100)
             await cog.on_message(message)
-            self.assertEqual(award.await_count, 1)
+            # Every eligible message reaches the atomic persistent limiter.
+            self.assertEqual(award.await_count, 2)
+
+    async def test_excluded_channels_and_roles_never_award_xp(self):
+        bot = SimpleNamespace(get_context=AsyncMock(return_value=SimpleNamespace(valid=False)))
+        cog = Community(bot)
+        message = SimpleNamespace(author=SimpleNamespace(id=100, bot=False, roles=[SimpleNamespace(id=9)]),
+                                  guild=SimpleNamespace(id=1), channel=SimpleNamespace(id=3), webhook_id=None, content='hello')
+        for config in [{'xp_ignored_channels': [3]}, {'xp_ignored_roles': [9]}]:
+            with patch('kuroo.workflows.community.settings', new=AsyncMock(return_value=config)), patch('kuroo.src.commands.community.checks.check_blacklist_predicate', return_value=True), patch('kuroo.src.commands.community.checks.check_ignore_predicate', return_value=True), patch('kuroo.workflows.community.award_xp', new=AsyncMock()) as award:
+                await cog.on_message(message)
+                award.assert_not_awaited()
+
+    async def test_level_template_renders_without_pinging_members(self):
+        channel = SimpleNamespace(send=AsyncMock())
+        bot = SimpleNamespace(get_context=AsyncMock(return_value=SimpleNamespace(valid=False)))
+        message = SimpleNamespace(author=SimpleNamespace(id=100, bot=False, roles=[], display_name='A*'),
+                                  guild=SimpleNamespace(id=1, name='Server', get_channel=lambda cid: channel),
+                                  channel=SimpleNamespace(id=3), webhook_id=None, content='hello')
+        with patch('kuroo.workflows.community.settings', new=AsyncMock(return_value={'level_channel': 2, 'level_message': '{user} / {level} / {xp} / {server}'})), patch('kuroo.src.commands.community.checks.check_blacklist_predicate', return_value=True), patch('kuroo.src.commands.community.checks.check_ignore_predicate', return_value=True), patch('kuroo.workflows.community.award_xp', new=AsyncMock(return_value={'leveled_up': True, 'level': 2, 'xp': 400})):
+            await Community(bot).on_message(message)
+        self.assertIn('/ 2 / 400 / Server', channel.send.await_args.args[0])
+        self.assertFalse(channel.send.await_args.kwargs['allowed_mentions'].everyone)
+
+    async def test_new_permission_boundaries_and_server_economy_toggle(self):
+        from discord.ext import commands
+        for command in [Community.economy_rewards, Community.economy_balance, Community.economy_reset]:
+            check = command.checks[0]
+            with patch('kuroo.src.checks.checks.check_is_admin_predicate', return_value=False):
+                self.assertFalse(check(SimpleNamespace(author=object())))
+            with patch('kuroo.src.checks.checks.check_is_admin_predicate', return_value=True):
+                self.assertTrue(check(SimpleNamespace(author=object())))
+        for command in [Community.level_rate, Community.level_announcements, Community.level_message, Community.level_exclude_role,
+                        Community.level_exclude_channel, Community.xp_edit, Community.economy_toggle]:
+            with patch('kuroo.src.commands.community.checks.check_is_admin_predicate', return_value=False):
+                for allowed in [False, True]:
+                    ctx = SimpleNamespace(guild=object(), author=SimpleNamespace(guild_permissions=SimpleNamespace(manage_guild=allowed)))
+                    self.assertEqual(await command.checks[0](ctx), allowed)
+        ctx = SimpleNamespace(guild=SimpleNamespace(id=1), command=Community.daily)
+        with patch('kuroo.workflows.community.settings', new=AsyncMock(return_value={'economy': False})):
+            with self.assertRaises(commands.DisabledCommand):
+                await Community(None).cog_check(ctx)
+
+    async def test_announcement_channel_alias_and_disable_use_same_configuration(self):
+        ctx = SimpleNamespace(guild=SimpleNamespace(id=1), defer=AsyncMock(), send=AsyncMock())
+        cog = Community(None)
+        channel = SimpleNamespace(id=42, mention='<#42>')
+        with patch('kuroo.workflows.community.configure', new=AsyncMock()) as configure:
+            await Community.level_announcements.callback(cog, ctx, channel)
+            configure.assert_awaited_with(1, level_channel=42)
+            await Community.level_announcements.callback(cog, ctx)
+            configure.assert_awaited_with(1, level_channel=0)
 
     async def test_economy_acknowledges_interactions_before_database_work(self):
         order = []
@@ -292,10 +406,6 @@ class CommunityBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs['view'].to_components()[0]['type'], 12)
         self.assertEqual(kwargs['file'].filename, 'kuroo-welcome.png')
 
-
-def commands_cooldown():
-    from discord.ext import commands
-    return commands.CooldownMapping.from_cooldown(1, 60, commands.BucketType.member)
 
 
 async def response_chunks(*chunks):

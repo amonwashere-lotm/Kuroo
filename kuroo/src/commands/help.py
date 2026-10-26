@@ -82,9 +82,19 @@ class BaseHelpView(ui.LayoutView):
         self.bot, self.ctx, self.reported = bot, ctx, reported
         self.message = None
         self.catalog = CommandCatalog(bot, ctx.guild)
-        banner = getattr(bot, 'help_banner_url', None)
+
+    def container(self):
+        container = ui.Container()
+        banner = getattr(self.bot, 'help_banner_url', None)
         if banner:
-            self.add_item(ui.MediaGallery(discord.MediaGalleryItem(media=banner)))
+            container.add_item(ui.MediaGallery(discord.MediaGalleryItem(media=banner)))
+        return container
+
+    def icon(self, name):
+        return str(getattr(self.bot.emoji, name, self.bot.emoji.CATEGORY)).strip()
+
+    def category_icon(self, key):
+        return str(self.catalog.categories[key].emoji or self.icon('CATEGORY')).strip()
 
     def get_language(self):
         guild_id = str(self.ctx.guild.id) if self.ctx.guild else ''
@@ -127,10 +137,10 @@ class BaseHelpView(ui.LayoutView):
     def navigation(self, container, *, back=True):
         row = ui.ActionRow()
         if self.pages > 1:
-            row.add_item(PageButton(-1, self.current_page == 0))
-            row.add_item(PageButton(1, self.current_page == self.pages - 1))
+            row.add_item(PageButton(-1, self.current_page == 0, self.icon('PREVIOUS')))
+            row.add_item(PageButton(1, self.current_page == self.pages - 1, self.icon('NEXT')))
         if back:
-            row.add_item(BackButton())
+            row.add_item(BackButton(self.icon('BACK')))
         container.add_item(row)
 
 
@@ -138,24 +148,24 @@ class HomeView(BaseHelpView):
     def __init__(self, bot, ctx, all_app_commands=None, reported=False, *, page=0):
         super().__init__(bot, ctx, reported=reported)
         categories = self.page(list(self.catalog.categories.values()), page)
-        container = ui.Container()
-        container.add_item(ui.TextDisplay(f'# {self.bot.user.display_name}\n-# {self.tr("Help menu", "Help menu")}'))
+        container = self.container()
+        container.add_item(ui.TextDisplay(f'# {self.icon("HELP")} {self.bot.user.display_name}\n-# {self.tr("Help menu", "Help menu")}'))
         container.add_item(ui.TextDisplay(
             f'{self.tr("Prefix", "Prefix")}: `{self.prefix}` · {self.tr("Commands", "Commands")}: **{len(self.catalog.entries)}**\n'
             + self.tr('Choose a category, browse all commands, or use `/help command:rank`.', 'Category chunein, sab commands dekhein, ya `/help command:rank` use karein.')
         ))
         if categories:
-            container.add_item(ui.TextDisplay('\n'.join(f'**{c.name}** · {len(self.catalog.in_category(c.key))} commands' for c in categories)))
+            container.add_item(ui.TextDisplay('\n'.join(f'{self.category_icon(c.key)} **{c.name}** · {len(self.catalog.in_category(c.key))} commands' for c in categories)))
             container.add_item(CategorySelectRow(self, categories))
         else:
             container.add_item(ui.TextDisplay('No public commands are loaded.'))
         row = ui.ActionRow()
-        row.add_item(AllCommandsButton())
+        row.add_item(AllCommandsButton(self.icon('COMMANDS')))
         row.add_item(ReportButton(self.bot.emoji.ERROR, bot))
         if reported:
             row.children[1].disabled = True
         for label, url in [('Invite', bot.urls.INVITE), ('Support', bot.urls.SUPPORT_SERVER), ('Vote', bot.urls.VOTE)]:
-            row.add_item(ui.Button(label=label, url=url))
+            row.add_item(ui.Button(label=label, url=url, emoji=self.icon({'Invite': 'INVITE', 'Support': 'SUPPORT', 'Vote': 'VOTE'}[label])))
         container.add_item(row)
         if self.pages > 1:
             container.add_item(ui.TextDisplay(f'Page {self.current_page + 1}/{self.pages}'))
@@ -167,8 +177,8 @@ class HomeView(BaseHelpView):
 
 
 class AllCommandsButton(ui.Button):
-    def __init__(self):
-        super().__init__(label='All Commands', style=discord.ButtonStyle.primary)
+    def __init__(self, emoji=None):
+        super().__init__(label='All Commands', style=discord.ButtonStyle.primary, emoji=emoji)
 
     async def callback(self, interaction):
         if await self.view.interaction_check(interaction):
@@ -180,7 +190,7 @@ class CategorySelectRow(ui.ActionRow):
         super().__init__()
         self.keys = [category.key for category in categories]
         select = ui.Select(placeholder=view.tr('Choose a category', 'Category chunein'), options=[
-            discord.SelectOption(label=category.name[:100], value=str(index), description=one_line(category.description, 100))
+            discord.SelectOption(label=category.name[:100], value=str(index), description=one_line(category.description, 100), emoji=view.category_icon(category.key))
             for index, category in enumerate(categories)
         ])
         select.callback = self.select_category
@@ -203,11 +213,11 @@ class AllCommandsView(BaseHelpView):
         entries = self.catalog.in_category(category) if category else self.catalog.entries
         self.entries = self.page(entries, page)
         title = self.catalog.categories[category].name if category in self.catalog.categories else self.tr('All Commands', 'Sabhi Commands')
-        container = ui.Container()
-        container.add_item(ui.TextDisplay(f'# {title}\n-# {len(entries)} commands · Page {self.current_page + 1}/{self.pages}'))
+        container = self.container()
+        container.add_item(ui.TextDisplay(f'# {self.category_icon(category) if category else self.icon("COMMANDS")} {title}\n-# {len(entries)} commands · Page {self.current_page + 1}/{self.pages}'))
         for entry in self.entries:
             methods = ' · '.join(('Prefix' if entry.prefix else '', 'Slash' if entry.slash else '')).strip(' ·')
-            container.add_item(ui.TextDisplay(f'**`{entry.name}`** · {methods}\n{one_line(entry.description, 100)}'))
+            container.add_item(ui.TextDisplay(f'{self.category_icon(entry.category)} **`{entry.name}`** · {methods}\n{one_line(entry.description, 100)}'))
         if self.entries:
             container.add_item(CommandSelectRow(self))
         else:
@@ -228,7 +238,7 @@ class CommandSelectRow(ui.ActionRow):
         super().__init__()
         self.names = [entry.name for entry in view.entries]
         select = ui.Select(placeholder=view.tr('Choose a command', 'Command chunein'), options=[
-            discord.SelectOption(label=entry.name[:100], value=str(index), description=one_line(entry.description, 100))
+            discord.SelectOption(label=entry.name[:100], value=str(index), description=one_line(entry.description, 100), emoji=view.category_icon(entry.category))
             for index, entry in enumerate(view.entries)
         ])
         select.callback = self.select_command
@@ -250,8 +260,8 @@ class CommandView(BaseHelpView):
         super().__init__(bot, ctx, reported=reported)
         self.entry = entry
         self.category = entry.category
-        container = ui.Container()
-        body = f'# {entry.name}\n{entry.description}\n\n**{self.tr("Usage", "Istemaal")}:**\n'
+        container = self.container()
+        body = f'# {self.category_icon(entry.category)} {entry.name}\n{entry.description}\n\n**{self.tr("Usage", "Istemaal")}:**\n'
         body += '\n'.join(f'`{usage}`' for usage in entry.usages(self.prefix))
         if entry.aliases:
             body += '\n\n**Aliases:** ' + ', '.join(f'`{self.prefix}{alias}`' for alias in entry.aliases)
@@ -260,14 +270,14 @@ class CommandView(BaseHelpView):
             body += '\n\n**Subcommands:**\n' + '\n'.join(f'`{name}`' for name in descendants)
         container.add_item(ui.TextDisplay(body))
         row = ui.ActionRow()
-        row.add_item(BackButton())
+        row.add_item(BackButton(self.icon('BACK')))
         container.add_item(row)
         self.add_item(container)
 
 
 class PageButton(ui.Button):
-    def __init__(self, delta, disabled):
-        super().__init__(label='Previous' if delta < 0 else 'Next', style=discord.ButtonStyle.secondary, disabled=disabled)
+    def __init__(self, delta, disabled, emoji=None):
+        super().__init__(label='Previous' if delta < 0 else 'Next', style=discord.ButtonStyle.secondary, disabled=disabled, emoji=emoji)
         self.delta = delta
 
     async def callback(self, interaction):
@@ -276,8 +286,8 @@ class PageButton(ui.Button):
 
 
 class BackButton(ui.Button):
-    def __init__(self):
-        super().__init__(label='Back', style=discord.ButtonStyle.secondary)
+    def __init__(self, emoji=None):
+        super().__init__(label='Back', style=discord.ButtonStyle.secondary, emoji=emoji)
 
     async def callback(self, interaction):
         if await self.view.interaction_check(interaction):

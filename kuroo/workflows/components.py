@@ -194,7 +194,13 @@ def message_payload(payload, previous=None, *, overflow_files=None):
         previews = [_container([_text('\n\n'.join(text)[:allowance] +
                     '\n\nFull message attached: kuroo-details.txt')], key)
                     for key, text in groups.items()]
-        # Keep the bot banner above long help pages as well.
+        nested_visuals = [media for item in items if item['type'] == 17
+                          for media in _walk(item.get('components', [])) if media['type'] == 12]
+        if nested_visuals:
+            if not previews:
+                previews = [_container([])]
+            previews[0]['components'] = nested_visuals + previews[0]['components']
+        # Preserve top-level media for callers that intentionally place it there.
         visuals = [item for item in items if item['type'] == 12]
         items = visuals + previews + controls + visible_files
         items.append({'type': 13, 'file': {'url': 'attachment://kuroo-details.txt'}})

@@ -6,6 +6,7 @@ third_party/Logiq-LICENSE and README credits. This storage implementation is nat
 from datetime import datetime, timedelta, timezone
 from math import isqrt
 import secrets
+from string import Formatter
 
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
@@ -58,7 +59,102 @@ async def configure(guild_id, **values):
     await collection.update_one({'_id': guild_id}, {'$set': values}, upsert=True)
 
 
+LEVEL_DEFAULTS = {'leveling': True, 'xp_amount': XP_PER_MESSAGE, 'xp_cooldown': XP_COOLDOWN,
+                  'level_channel': 0, 'level_message': '{user} reached **level {level}**!',
+                  'xp_ignored_channels': [], 'xp_ignored_roles': []}
+ECONOMY_DEFAULTS = {'daily_reward': 250, 'daily_cooldown': 86400,
+                    'work_min': 80, 'work_max': 160, 'work_cooldown': 3600}
+
+
+def whole(value, minimum, maximum):
+    if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+        raise CommunityError(f'Enter a whole number from {minimum:,} to {maximum:,}.')
+
+
+def validate_level_message(template):
+    if not 1 <= len(template) <= 1000:
+        raise CommunityError('Announcement messages must contain 1–1000 characters.')
+    try:
+        for _, field, spec, conversion in Formatter().parse(template):
+            if field is not None and (field not in ('user', 'level', 'xp', 'server') or spec or conversion):
+                raise ValueError()
+    except ValueError:
+        raise CommunityError('Use only {user}, {level}, {xp} and {server} without format modifiers.') from None
+
+
+async def level_settings(guild_id):
+    return LEVEL_DEFAULTS | await settings(guild_id)
+
+
+async def configure_levels(guild_id, **values):
+    for key, value in values.items():
+        if key == 'xp_amount':
+            whole(value, 1, 1000)
+        elif key == 'xp_cooldown':
+            whole(value, 5, 3600)
+        elif key == 'level_message':
+            validate_level_message(value)
+        else:
+            raise CommunityError('Unknown leveling setting.')
+    await configure(guild_id, **values)
+
+
+async def xp_exclusion(guild_id, kind, target_id, *, remove=False):
+    if kind not in ('channels', 'roles'):
+        raise CommunityError('Choose channels or roles.')
+    collection = await get_collection('community_settings')
+    await collection.update_one({'_id': guild_id},
+        {'$pull' if remove else '$addToSet': {f'xp_ignored_{kind}': target_id}}, upsert=True)
+
+
+async def edit_xp(guild_id, user_id, amount, *, mode):
+    whole(amount, 0, MAX_AMOUNT)
+    if mode not in ('add', 'remove', 'set'):
+        raise CommunityError('Choose add, remove or set.')
+    collection = await get_collection('member_levels')
+    key = {'guild_id': guild_id, 'user_id': user_id}
+    try:
+        await collection.update_one(key, {'$setOnInsert': dict(key, xp=0)}, upsert=True)
+    except DuplicateKeyError:
+        pass
+    value = amount if mode == 'set' else {'$min': [MAX_AMOUNT, {'$max': [0,
+        {'$add': [{'$ifNull': ['$xp', 0]}, amount if mode == 'add' else -amount]}]}]}
+    record = await collection.find_one_and_update(key, [{'$set': {'xp': value}}], return_document=ReturnDocument.AFTER)
+    return {'xp': record['xp'], 'level': level_for_xp(record['xp'])}
+
+
+async def economy_settings():
+    return ECONOMY_DEFAULTS | await settings('economy')
+
+
+async def configure_rewards(kind, minimum, maximum, cooldown):
+    if kind not in ('daily', 'work'):
+        raise CommunityError('Choose daily or work.')
+    whole(minimum, 1, 1_000_000)
+    whole(maximum, minimum, 1_000_000)
+    whole(cooldown, 60, 604800)
+    if kind == 'daily' and minimum != maximum:
+        raise CommunityError('Daily rewards use one fixed amount; use the same minimum and maximum.')
+    values = {f'{kind}_cooldown': cooldown}
+    values.update({'daily_reward': minimum} if kind == 'daily' else {'work_min': minimum, 'work_max': maximum})
+    await configure('economy', **values)
+
+
+async def reset_earn_cooldown(user_id, kind):
+    if kind not in ('daily', 'work', 'all'):
+        raise CommunityError('Choose daily, work or all.')
+    await wallet(user_id)
+    fields = ['daily_at', 'work_at'] if kind == 'all' else [f'{kind}_at']
+    collection = await get_collection('users')
+    record = await collection.find_one_and_update({'user_id': user_id}, {'$unset': {field: '' for field in fields}},
+                                                 return_document=ReturnDocument.AFTER)
+    return await _publish(record)
+
+
 async def award_xp(guild_id, user_id):
+    config = await level_settings(guild_id)
+    if not config['leveling']:
+        return None
     collection = await get_collection('member_levels')
     key = {'guild_id': guild_id, 'user_id': user_id}
     try:
@@ -67,13 +163,13 @@ async def award_xp(guild_id, user_id):
         pass
     stamp = now()
     before = await collection.find_one_and_update(
-        dict(key, **{'$or': [{'xp_at': None}, {'xp_at': {'$lte': stamp - timedelta(seconds=XP_COOLDOWN)}}]}),
-        {'$inc': {'xp': XP_PER_MESSAGE}, '$set': {'xp_at': stamp}},
+        dict(key, **{'$or': [{'xp_at': None}, {'xp_at': {'$lte': stamp - timedelta(seconds=config['xp_cooldown'])}}]}),
+        [{'$set': {'xp': {'$min': [MAX_AMOUNT, {'$add': ['$xp', config['xp_amount']]}]}, 'xp_at': stamp}}],
         return_document=ReturnDocument.BEFORE,
     )
     if before is None:
         return None
-    xp = before['xp'] + XP_PER_MESSAGE
+    xp = min(MAX_AMOUNT, before['xp'] + config['xp_amount'])
     return {'xp': xp, 'level': level_for_xp(xp), 'leveled_up': level_for_xp(xp) > level_for_xp(before['xp'])}
 
 
@@ -123,8 +219,9 @@ async def earn(user_id, kind):
     await wallet(user_id)
     stamp = now()
     field = 'daily_at' if kind == 'daily' else 'work_at'
-    cooldown = timedelta(hours=24 if kind == 'daily' else 1)
-    reward = 250 if kind == 'daily' else 80 + secrets.randbelow(81)
+    config = await economy_settings()
+    cooldown = timedelta(seconds=config[f'{kind}_cooldown'])
+    reward = config['daily_reward'] if kind == 'daily' else config['work_min'] + secrets.randbelow(config['work_max'] - config['work_min'] + 1)
     collection = await get_collection('users')
     record = await collection.find_one_and_update(
         {'user_id': user_id, '$or': [{field: None}, {field: {'$lte': stamp - cooldown}}]},

@@ -219,6 +219,20 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn('banner.png', json.dumps(payload['components'][0]))
         view.stop()
 
+    async def test_overflow_keeps_nested_help_banner_inside_container(self):
+        view = discord.ui.LayoutView()
+        container = discord.ui.Container()
+        container.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media='https://example.com/banner.png')))
+        container.add_item(discord.ui.TextDisplay('Long description ' * 400))
+        view.add_item(container)
+        with discord.http.handle_message_parameters(view=view) as params:
+            payload = body(params)
+            self.assertEqual(payload['components'][0]['type'], 17)
+            self.assertEqual(payload['components'][0]['components'][0]['type'], 12)
+            self.assertIn('banner.png', json.dumps(payload['components'][0]))
+            self.assertEqual(len(params.files), 1)
+        view.stop()
+
     async def test_overflow_preserves_existing_upload(self):
         with closing(discord.File(BytesIO(b'data'), filename='data.csv')) as file:
             with discord.http.handle_message_parameters('x' * 5000, file=file) as params:

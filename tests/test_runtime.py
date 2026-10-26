@@ -22,9 +22,26 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             self.assertGreater(len(bot.tree.get_commands()), 60)
             self.assertIn('help', bot.all_commands)
             self.assertIsNotNone(bot.tree.get_command('help'))
-            for name in ('premiumcode', 'premiumgrant', 'premiumrevoke', 'votepremium', 'redeem', 'noprefix', 'rank', 'lb', 'daily', 'work', 'balance', 'deposit', 'withdraw', 'shop', 'buy', 'inventory', 'equip', 'leveling', 'levelchannel', 'welcomecards', 'leave', 'welcomepreview', 'leavepreview'):
+            for name in ('premiumcode', 'premiumgrant', 'premiumrevoke', 'votepremium', 'redeem', 'noprefix', 'rank', 'lb', 'daily', 'work', 'balance', 'deposit', 'withdraw', 'shop', 'buy', 'inventory', 'equip', 'leveling', 'levelchannel', 'welcomecards', 'leave', 'welcomepreview', 'leavepreview', 'levelconfig', 'xp', 'economy'):
                 self.assertIn(name, bot.all_commands)
                 self.assertIsNotNone(bot.tree.get_command(name))
+            # Validate the exact definitions sent by tree.sync, including nested options.
+            definitions = [command.to_dict(bot.tree) for command in bot.tree.get_commands()]
+            self.assertLessEqual(len(definitions), 100)
+            def validate(items):
+                for item in items:
+                    self.assertTrue(1 <= len(item['name']) <= 32, item['name'])
+                    if 'description' in item:
+                        self.assertTrue(1 <= len(item['description']) <= 100, item['name'])
+                    self.assertLessEqual(len(item.get('choices', [])), 25)
+                    self.assertLessEqual(len(item.get('options', [])), 25)
+                    validate(item.get('options', []))
+            validate(definitions)
+            for path in [('levelconfig', 'announcements'), ('levelconfig', 'ignorechannel'),
+                         ('levelconfig', 'rate'), ('xp', 'edit'), ('economy', 'rewards')]:
+                command = bot.tree.get_command(path[0]).get_command(path[1])
+                self.assertIsNotNone(command)
+                self.assertIsNotNone(bot.get_command(' '.join(path)))
         finally:
             for name in list(bot.cogs):
                 await bot.remove_cog(name)

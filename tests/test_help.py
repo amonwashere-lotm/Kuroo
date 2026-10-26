@@ -124,7 +124,8 @@ class HelpTests(unittest.IsolatedAsyncioTestCase):
         self.bot.tree.fetch_commands.assert_not_awaited()
         view = self.ctx.send.await_args.kwargs['view']
         body = self.serialize(view)
-        self.assertEqual(body['components'][0]['type'], 12)
+        self.assertEqual(body['components'][0]['type'], 17)
+        self.assertEqual(body['components'][0]['components'][0]['type'], 12)
         self.assertIn('Unlabelled', json.dumps(body))
         view.stop()
 
@@ -166,7 +167,8 @@ class HelpTests(unittest.IsolatedAsyncioTestCase):
             view = AllCommandsView(self.bot, self.ctx, page=page)
             seen.extend(entry.name for entry in view.entries)
             body = self.serialize(view)
-            self.assertEqual(body['components'][0]['type'], 12)
+            self.assertEqual(body['components'][0]['type'], 17)
+            self.assertEqual(body['components'][0]['components'][0]['type'], 12)
             self.assertNotIn('kuroo-details.txt', json.dumps(body))
             for item in view.walk_children():
                 if isinstance(item, discord.ui.Select):
@@ -264,7 +266,7 @@ class HelpTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_real_startup_registers_new_commands_before_publishing(self):
         async def publish():
-            for name in ('rank', 'lb', 'balance', 'daily', 'work', 'leave', 'welcomecards', 'premiumcode', 'help', 'synccommands'):
+            for name in ('rank', 'lb', 'balance', 'daily', 'work', 'leave', 'welcomecards', 'premiumcode', 'help', 'synccommands', 'levelconfig', 'xp', 'economy'):
                 self.assertIsNotNone(self.bot.get_command(name), name)
                 self.assertIsNotNone(self.bot.tree.get_command(name), name)
             return self.bot.tree.get_commands()
@@ -283,6 +285,29 @@ class HelpTests(unittest.IsolatedAsyncioTestCase):
             seen.extend(entry.name for entry in view.entries)
             view.stop()
         self.assertEqual(set(seen), {entry.name for entry in catalog.entries})
+
+    async def test_community_categories_custom_emojis_and_group_inheritance(self):
+        from kuroo.src.commands.community import Community
+        await self.bot.add_cog(Community(self.bot))
+        self.bot.help_banner_url = 'https://example.com/banner.png'
+        catalog = CommandCatalog(self.bot, self.ctx.guild)
+        for name, category in [('rank', 'Leveling'), ('levelconfig rate', 'Leveling'), ('xp edit', 'Leveling'),
+                               ('economy rewards', 'Economy'), ('daily', 'Economy'), ('leave', 'MemberCards')]:
+            self.assertEqual(catalog.find(name).category, category)
+        self.assertNotIn('Community', catalog.categories)
+        for view in [HomeView(self.bot, self.ctx), AllCommandsView(self.bot, self.ctx),
+                     CategoryView(self.bot, self.ctx, category='Leveling'),
+                     CommandView(self.bot, self.ctx, entry=catalog.find('xp edit'))]:
+            payload = self.serialize(view)
+            self.assertEqual(payload['components'][0]['type'], 17)
+            self.assertEqual(payload['components'][0]['components'][0]['type'], 12)
+            for item in view.walk_children():
+                if isinstance(item, discord.ui.Select):
+                    self.assertTrue(all(option.emoji and option.emoji.id for option in item.options))
+                elif isinstance(item, discord.ui.Button):
+                    self.assertIsNotNone(item.emoji)
+                    self.assertIsNotNone(item.emoji.id)
+            view.stop()
 
     async def test_failed_sync_can_be_retried_without_losing_commands(self):
         self.ctx.defer = AsyncMock()

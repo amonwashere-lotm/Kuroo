@@ -150,7 +150,13 @@ Hidden commands, hidden parents, and hidden admin cogs remain hidden.
 - `/help command:rank` or `?help rank`: see usage, arguments and aliases.
 - `?help tools subcommand`: look up a nested command (replace with an actual path).
 - Categories and command lists are paginated, so Discord's 25-option limit does
-  not hide new entries. The bot banner stays above every help page.
+  not hide new entries. The bot banner is the first media gallery **inside** each
+  Components V2 help container, including command detail pages. Categories,
+  command dropdown options and navigation buttons use synchronized custom emojis.
+- Leveling, Economy, and Welcome & Leave have separate categories. Utilities,
+  general tools, voice rooms and server security have clearer category names.
+  Future commands still appear automatically; command metadata can choose a
+  category with `extras={"category": "Leveling"}` (inherited by subcommands).
 - Help uses the local registry and works even when Discord's remote command-list
   API is unavailable. Server prefixes and English/Hindi language preferences are retained.
 
@@ -167,12 +173,14 @@ not restart a hosted bot: deploy the latest `main` and restart the host to run i
 ## Leveling and economy
 
 These are hybrid commands: use `/command` or your server prefix (default `?`).
-Leveling starts enabled. Human messages containing at least three characters earn
+Leveling starts enabled. By default, human messages containing at least three characters earn
 **15 XP once per 60 seconds per member per server**. Bots, webhooks, DMs,
 recognized commands, ignored channels/users, and bot-blacklisted users/servers do
 not earn XP. Cooldowns survive restarts. Level `n` starts at `100 × n²` total XP.
 Rank is server-specific; equal XP is ordered by user ID for stable positions.
-Level-up announcements are off until a channel is selected.
+Level-up announcements are off until a channel is selected. Managers can change
+the XP rate/cooldown and exclude channels or roles. The persistent database
+cooldown is authoritative, so rate changes work without restarting the bot.
 
 | Command | What it does |
 | --- | --- |
@@ -182,12 +190,47 @@ Level-up announcements are off until a channel is selected.
 | `/leveling on` / `/leveling off` | Manage Server or bot admins: enable/disable XP collection. Existing XP is retained. |
 | `/levelchannel [channel]` | Manage Server or bot admins: select the level-up channel; omit it to disable announcements. |
 | `/balance [member]` | Show global wallet and bank balances. Prefix aliases: `bal`, `wallet`. |
-| `/daily` | Earn 250 coins once every 24 hours. |
-| `/work` | Earn 80–160 coins once every hour. |
+| `/daily` | Claim the configured daily reward (default 250 coins / 24 hours). |
+| `/work` | Claim the configured work reward (default 80–160 coins / hour). |
 | `/deposit amount` / `/withdraw amount` | Move positive whole coins between wallet and bank; no fees or interest. |
 | `/shop` | Browse cosmetic rank titles. |
 | `/buy item` | Buy `night-owl` (500), `aurora` (1,500), or `after-hours` (3,000 coins), once each. |
 | `/inventory` / `/equip item` | View owned titles and equip one on your rank card; `/equip none` clears it. |
+
+### Leveling controls
+
+Manage Server permission or bot-admin access is required for configuration and XP edits.
+All commands support both prefix and slash invocation; for prefix groups, omit
+`show` to view settings (for example, `?levelconfig`).
+
+| Command | What it does |
+| --- | --- |
+| `/levelconfig show` | Show XP rate, cooldown, announcement channel/template and excluded channels/roles. |
+| `/levelconfig rate amount cooldown` | Set 1–1,000 XP per eligible message, with a 5–3,600 second cooldown. |
+| `/levelconfig announcements [channel]` | Select the level announcement channel; omit it to disable. `/levelchannel` remains available. |
+| `/levelconfig message template` | Set up to 1,000 characters using `{user}`, `{level}`, `{xp}` and `{server}`. Mentions are disabled. |
+| `/levelconfig ignorechannel channel action` | `exclude` a channel from XP or `include` it again. |
+| `/levelconfig ignorerole role action` | Exclude/include members holding a role. An excluded role takes precedence. |
+| `/xp show [member]` | Anyone can view server XP and level without generating a card. |
+| `/xp edit member action amount` | Add, remove or set XP. `set 0` resets a member. Edits stay in this server, clamp at zero and 1 trillion XP, and do not send level announcements. |
+
+### Economy controls
+
+Wallets remain **global**, so server managers cannot mint or edit coins. Bot admins
+are configured developers or stored bot admins/owners, as defined in the premium
+section. Server administrators alone do not gain these permissions.
+
+| Command | Permission and behavior |
+| --- | --- |
+| `/economy show` | Anyone: view current global rewards/cooldowns and whether economy is enabled here. |
+| `/economy toggle on\|off` | Manage Server or bot admins: enable/disable wallet, rewards, bank, shop, inventory and coin leaderboard commands here. Existing balances and global cooldowns are retained. |
+| `/economy rewards kind minimum maximum cooldown` | Bot admins: set `daily` or `work` rewards globally (1–1,000,000 coins; 60–604,800 seconds). Daily uses equal minimum and maximum. |
+| `/economy balance member action amount` | Bot admins: add, remove or set a user's global wallet balance; removals clamp at zero. |
+| `/economy resetcooldown member kind` | Bot admins: clear `daily`, `work` or `all` reward cooldowns without changing balances. |
+
+Reward changes retain the original last-claim timestamp and apply the new cooldown
+to that timestamp. Enabling/disabling economy in a server never resets cooldowns.
+Bank transfers and purchases continue to use the same atomic storage operations.
 
 Coins reuse existing global `users.balance` records, including the owner's
 `root givebalance`, `root removebalance`, and `root setbalance` commands. Existing
@@ -283,8 +326,8 @@ for legacy subscription code types.
 ### Help banner
 
 Upload a banner for the bot's Discord profile, or set `BOT_BANNER_URL` to a public
-HTTPS image URL. Help fetches the bot's banner and places it above every help page
-as a Components V2 media gallery. If no banner exists, help still works without it.
+HTTPS image URL. Help fetches the bot's banner and places it at the top **inside** every help
+container as a Components V2 media gallery. If no banner exists, help still works without it.
 Restart the bot after changing an uploaded banner or the override.
 
 ### Database upgrade

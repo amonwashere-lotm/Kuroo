@@ -81,7 +81,8 @@ class PermissionAndLayoutTests(unittest.IsolatedAsyncioTestCase):
         self.bot.help_banner_url = 'https://example.com/bot-banner.png'
         ctx = SimpleNamespace(guild=SimpleNamespace(id=200), author=SimpleNamespace(id=100))
         view = HomeView(self.bot, ctx, [])
-        self.assertEqual(view.to_components()[0]['type'], 12)
+        self.assertEqual(view.to_components()[0]['type'], 17)
+        self.assertEqual(view.to_components()[0]['components'][0]['type'], 12)
         self.assertIn('bot-banner.png', json.dumps(view.to_components()[0]))
         with discord.http.handle_message_parameters(view=view) as params:
             self.assertNotIn('accent_color', json.dumps(params.payload))
