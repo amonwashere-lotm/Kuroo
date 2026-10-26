@@ -14,7 +14,9 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         bot = AutoShardedBot()
         await bot._async_setup_hook()
         try:
-            self.assertEqual(bot.status, discord.Status.dnd)
+            self.assertEqual(bot.status, discord.Status.online)
+            self.assertEqual(bot.activity.type, discord.ActivityType.streaming)
+            self.assertEqual(bot.activity.url, bot.BotConfig.STREAMING_URL)
             self.assertEqual(bot.activity.name, 'Kuroo Devlopment')
             await bot.load_extension('kuroo.src')
             self.assertEqual(len(bot.cogs), 41)
@@ -47,24 +49,30 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
                 await bot.remove_cog(name)
             await bot.http.close()
 
-    async def test_presence_rotation_keeps_dnd_and_both_command_hints(self):
+    async def test_presence_rotation_keeps_streaming_and_both_command_hints(self):
         sent = []
         async def change_presence(**kwargs):
             sent.append(kwargs)
         bot = SimpleNamespace(
             wait_until_ready=AsyncMock(), is_closed=lambda: len(sent) >= 8,
-            change_presence=change_presence, BotConfig=SimpleNamespace(PREFIX='!'),
+            change_presence=change_presence, BotConfig=SimpleNamespace(PREFIX='!', STREAMING_URL='https://www.twitch.tv/discord'),
             guilds=[SimpleNamespace(member_count=10)], commands=[1, 2],
             urls=SimpleNamespace(WEBSITE='https://example.com'),
         )
         cog = ready(bot)
         with patch('kuroo.src.events.ready.asyncio.sleep', new=AsyncMock()):
             await cog.activity()
-        self.assertTrue(all(item['status'] == discord.Status.dnd for item in sent))
+        self.assertTrue(all(item['status'] == discord.Status.online for item in sent))
+        for item in sent:
+            payload = item['activity'].to_dict()
+            self.assertEqual(payload['type'], discord.ActivityType.streaming.value)
+            self.assertEqual(payload['url'], 'https://www.twitch.tv/discord')
+            self.assertEqual(payload['details'], payload['name'])
         self.assertEqual(sent[0]['activity'].name, 'Kuroo Devlopment')
         self.assertEqual(sent[7]['activity'].name, 'Kuroo Devlopment')
         names = [item['activity'].name for item in sent]
         self.assertIn('!help | /help', names)
+        self.assertIn('/help', names)
 
     async def test_reconnect_does_not_duplicate_presence_task(self):
         bot = SimpleNamespace(

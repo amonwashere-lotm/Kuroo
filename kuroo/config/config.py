@@ -9,6 +9,7 @@ class BotConfigClass:
     PREFIX = os.getenv("PREFIX", "?")
     SHARD_COUNT = int(os.getenv("SHARD_COUNT", 2))
     NAME = os.getenv("BOT_NAME", "Kuroo")
+    STREAMING_URL = os.getenv("STREAMING_URL", "https://www.twitch.tv/discord")
     DASHBOARD_ENABLED = os.getenv("DASHBOARD_ENABLED", "True").lower() == "true"
     WEB_HOST = os.getenv("WEB_HOST", "0.0.0.0")
     WEB_PORT = int(os.getenv("WEB_PORT", 25572))

@@ -27,8 +27,21 @@ require running a second bot or installing the reference project.
 - Buttons and selects keep their callbacks. Partial edits retain the message body.
 - Long documents beyond Discord's V2 limits are supplied as `kuroo-details.txt`.
 - Presence starts with **Kuroo Devlopment**, rotates through a prefix hint and `/help`,
-  server/user statistics, and the website, and always stays in **Do Not Disturb**.
+  server/user statistics, and the website. Every rotation uses a **Streaming**
+  activity linked to `https://www.twitch.tv/discord` (the canonical form of the
+  requested mobile Twitch link). Presence is online so DND does not override it.
+  Set `STREAMING_URL` to change the stream link.
 - The source bot's `.env` is excluded. Configure your own account and developer IDs.
+
+### Discord profile name effects
+
+The requested **Headbang** name effect with gradient **#5b178c → #c09bd4** cannot
+be configured by this bot: Discord's documented
+[Modify Current User API](https://docs.discord.com/developers/resources/user#modify-current-user)
+exposes username/avatar/banner editing, with no font, effect or gradient name-style
+setter. These profile effects are separate from streaming presence. This update
+configures streaming; it does not apply a Headbang effect or gradient to the Discord
+profile name. Message containers continue to have no accent color.
 
 ## Upstream showcase
 

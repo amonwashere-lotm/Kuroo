@@ -92,20 +92,22 @@ class ready(commands.Cog):
         await self.bot.wait_until_ready()
 
         activities = [
-            lambda: discord.CustomActivity(name="Kuroo Devlopment"),
-            lambda: discord.Activity(type=discord.ActivityType.listening, name=f"{self.bot.BotConfig.PREFIX}help | /help"),
-            lambda: discord.Activity(type=discord.ActivityType.listening, name="/help"),
-            lambda: discord.Activity(type=discord.ActivityType.watching, name=f"{len(self.bot.guilds)} servers"),
-            lambda: discord.Activity(type=discord.ActivityType.watching, name=f"{sum(g.member_count for g in self.bot.guilds if g.member_count)} users"),
-            lambda: discord.Activity(type=discord.ActivityType.watching, name=f"{len(self.bot.commands)} commands"),
-            lambda: discord.Activity(type=discord.ActivityType.watching, name=getattr(self.bot.urls, "WEBSITE", "Website")),
+            lambda: "Kuroo Devlopment",
+            lambda: f"{self.bot.BotConfig.PREFIX}help | /help",
+            lambda: "/help",
+            lambda: f"{len(self.bot.guilds)} servers",
+            lambda: f"{sum(g.member_count for g in self.bot.guilds if g.member_count)} users",
+            lambda: f"{len(self.bot.commands)} commands",
+            lambda: getattr(self.bot.urls, "WEBSITE", "Website"),
         ]
 
         index = 0
         while not self.bot.is_closed():
             try:
-                activity = activities[index % len(activities)]()
-                await self.bot.change_presence(status=discord.Status.dnd, activity=activity)
+                activity = discord.Streaming(
+                    name=activities[index % len(activities)](), url=self.bot.BotConfig.STREAMING_URL
+                )
+                await self.bot.change_presence(status=discord.Status.online, activity=activity)
                 # logger.system(f"Presence Updated -> {activity.type.name} {activity.name}")
                 index += 1
                 await asyncio.sleep(60)
